@@ -49,7 +49,7 @@ class ShutterPilotGlobalAutoSwitch(SwitchEntity):
         new_opts[CONF_GLOBAL_AUTO] = value
         self.hass.config_entries.async_update_entry(self.entry, options=new_opts)
 
-    @callback
-    def async_update(self):
-        # follow options updates
+    async def async_update(self):
+        """Update the state from config entry options."""
         self._is_on = bool(self.entry.options.get(CONF_GLOBAL_AUTO, self._is_on))
+        self.async_write_ha_state()
