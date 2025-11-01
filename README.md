@@ -3,7 +3,7 @@
 HACS Integration für intelligente Rollladensteuerung (Zeit, Sonne, Helligkeit, Temperatur, Fenster-/Türlogik).
 
 ## Installation (HACS)
-- HACS → Custom repositories → `https://github.com/<DEIN_USER>/shutterpilot` (Integration)
+- HACS → Custom repositories → `https://github.com/fschubi/shutterpilot` (Integration)
 - Dann: HACS → Integrations → ShutterPilot installieren
 - HA neu starten → Einstellungen → Integrationen → ShutterPilot hinzufügen
 
