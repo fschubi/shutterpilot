@@ -1,0 +1,27 @@
+{
+  "title": "ShutterPilot",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up ShutterPilot",
+        "description": "Global defaults",
+        "data": {
+          "global_auto": "Enable automation globally",
+          "default_ventilation_position": "Default ventilation position (%)",
+          "default_cooldown": "Cooldown after window closed (sec)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "global_auto": "Enable automation globally",
+          "default_ventilation_position": "Default ventilation position (%)",
+          "default_cooldown": "Cooldown after window closed (sec)"
+        }
+      }
+    }
+  }
+}

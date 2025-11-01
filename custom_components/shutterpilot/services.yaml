@@ -1,0 +1,12 @@
+all_down:
+  name: Alle runter
+  target: {}
+all_up:
+  name: Alle hoch
+  target: {}
+stop:
+  name: Stopp
+  target: {}
+recalculate_now:
+  name: Recalculate now
+  target: {}

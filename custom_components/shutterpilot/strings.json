@@ -1,0 +1,27 @@
+{
+  "title": "ShutterPilot",
+  "config": {
+    "step": {
+      "user": {
+        "title": "ShutterPilot einrichten",
+        "description": "Globale Standardwerte",
+        "data": {
+          "global_auto": "Automatik global aktiv",
+          "default_ventilation_position": "Standard Lüftungsposition (%)",
+          "default_cooldown": "Cooldown nach Fenster-zu (Sek.)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "global_auto": "Automatik global aktiv",
+          "default_ventilation_position": "Standard Lüftungsposition (%)",
+          "default_cooldown": "Cooldown nach Fenster-zu (Sek.)"
+        }
+      }
+    }
+  }
+}
