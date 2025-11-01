@@ -44,8 +44,3 @@ class ShutterPilotDefaultVPosNumber(NumberEntity):
         new_opts[CONF_DEFAULT_VPOS] = self._value
         self.hass.config_entries.async_update_entry(self.entry, options=new_opts)
         self.async_write_ha_state()
-
-    async def async_update(self):
-        """Update the value from config entry options."""
-        self._value = int(self.entry.options.get(CONF_DEFAULT_VPOS, self._value))
-        self.async_write_ha_state()
