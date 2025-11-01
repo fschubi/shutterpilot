@@ -1,7 +1,7 @@
 {
   "domain": "shutterpilot",
   "name": "ShutterPilot",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "config_flow": true,
   "documentation": "https://github.com/fschube/shutterpilot",
   "issue_tracker": "https://github.com/fschube/shutterpilot/issues",
