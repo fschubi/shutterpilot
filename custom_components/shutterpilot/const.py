@@ -1,7 +1,33 @@
 DOMAIN = "shutterpilot"
+DOMAIN = "shutterpilot"
 
+# Global config/options
 CONF_GLOBAL_AUTO = "global_auto"
 CONF_DEFAULT_VPOS = "default_ventilation_position"
 CONF_DEFAULT_COOLDOWN = "default_cooldown"
 
-STORAGE_DATA = "data"
+# Profiles
+CONF_PROFILES = "profiles"
+P_NAME = "name"
+P_COVER = "cover_entity_id"
+P_WINDOW = "window_sensor"
+P_DOOR = "door_sensor"
+P_DAY_POS = "day_position"
+P_NIGHT_POS = "night_position"
+P_VPOS = "vent_position"
+P_DOOR_SAFE = "door_safe_position"
+P_LUX = "lux_sensor"
+P_TEMP = "temp_sensor"
+P_LUX_TH = "lux_threshold"
+P_TEMP_TH = "temp_threshold"
+P_UP_TIME = "up_time"          # "HH:MM" or ""
+P_DOWN_TIME = "down_time"      # "HH:MM" or ""
+P_AZ_MIN = "azimuth_min"       # float deg
+P_AZ_MAX = "azimuth_max"       # float deg
+P_COOLDOWN = "cooldown_sec"    # int sec
+P_ENABLED = "enabled"          # bool
+
+# Runtime keys
+DATA = "data"
+RUNTIME_PROFILES = "runtime_profiles"
+UNSUBS = "unsubs"
