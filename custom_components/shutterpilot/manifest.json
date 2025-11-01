@@ -1,11 +1,11 @@
 {
   "domain": "shutterpilot",
   "name": "ShutterPilot",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "config_flow": true,
-  "documentation": "https://github.com/<DEIN_USER>/shutterpilot",
-  "issue_tracker": "https://github.com/<DEIN_USER>/shutterpilot/issues",
-  "codeowners": ["@<DEIN_USER>"],
+  "documentation": "https://github.com/fschube/shutterpilot",
+  "issue_tracker": "https://github.com/fschube/shutterpilot/issues",
+  "codeowners": ["@fschube"],
   "iot_class": "local_push",
   "requirements": []
 }
