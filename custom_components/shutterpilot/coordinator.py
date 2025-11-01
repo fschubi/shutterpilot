@@ -13,7 +13,6 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 from homeassistant.helpers import entity_component
-from homeassistant.components.sun import sun as sun_comp
 
 from .const import (
     CONF_GLOBAL_AUTO, CONF_DEFAULT_VPOS, CONF_DEFAULT_COOLDOWN,
