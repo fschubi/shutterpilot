@@ -77,31 +77,10 @@ class ProfileController:
             _LOGGER.warning("Profile %s has no cover_entity_id; skipping", self.name)
             return
         
-        # Validate cover entity exists (warning only, entity might load later)
-        cover_state = self.hass.states.get(self.cover)
-        if not cover_state:
-            _LOGGER.warning("Profile %s: Cover entity %s not found yet (might load later)", self.name, self.cover)
-        
-        # Validate optional sensors exist
-        if self.window:
-            window_state = self.hass.states.get(self.window)
-            if not window_state:
-                _LOGGER.warning("Profile %s: Window sensor %s not found; ignoring", self.name, self.window)
-        
-        if self.door:
-            door_state = self.hass.states.get(self.door)
-            if not door_state:
-                _LOGGER.warning("Profile %s: Door sensor %s not found; ignoring", self.name, self.door)
-        
-        if self.lux_sensor:
-            lux_state = self.hass.states.get(self.lux_sensor)
-            if not lux_state:
-                _LOGGER.warning("Profile %s: Lux sensor %s not found; ignoring", self.name, self.lux_sensor)
-        
-        if self.temp_sensor:
-            temp_state = self.hass.states.get(self.temp_sensor)
-            if not temp_state:
-                _LOGGER.warning("Profile %s: Temp sensor %s not found; ignoring", self.name, self.temp_sensor)
+        # Note: We do NOT validate entity existence at startup anymore
+        # Entities might not be loaded yet during HA startup (race condition)
+        # Validation happens during actual operations instead
+        _LOGGER.debug("Profile %s: Starting (entity validation deferred to runtime)", self.name)
 
         # Subscribe to events
         if self.window:
@@ -141,12 +120,18 @@ class ProfileController:
 
     # ---------- public actions ----------
     async def open_cover(self):
+        if not self._validate_cover_exists():
+            return
         await self._svc("cover.open_cover", fallback=("cover.set_cover_position", {"position": 100}))
 
     async def stop_cover(self):
+        if not self._validate_cover_exists():
+            return
         await self._svc("cover.stop_cover", fallback=None)
 
     async def close_cover_respecting_rules(self):
+        if not self._validate_cover_exists():
+            return
         if self._is_on(self.door):
             await self._set_pos(max(self.vpos, self.door_safe))
         elif self._is_on(self.window):
@@ -159,6 +144,11 @@ class ProfileController:
         if not self._auto_allowed():
             _LOGGER.debug("[%s] Auto disabled, skipping", self.name)
             self._update_status("inactive", "auto_disabled")
+            return
+        
+        # Validate cover exists before doing anything
+        if not self._validate_cover_exists():
+            self._update_status("inactive", "cover_not_found")
             return
 
         # if door open -> safe gap
@@ -344,6 +334,22 @@ class ProfileController:
     def _auto_allowed(self) -> bool:
         opt = self.entry.options
         return bool(opt.get(CONF_GLOBAL_AUTO, True) and self.enabled)
+    
+    def _validate_cover_exists(self) -> bool:
+        """Validate cover entity exists at runtime. Returns True if OK."""
+        if not self.cover:
+            return False
+        cover_state = self.hass.states.get(self.cover)
+        if not cover_state:
+            # Only log once per minute to avoid spam
+            if not hasattr(self, '_last_cover_warning'):
+                self._last_cover_warning = datetime.now()
+                _LOGGER.warning("[%s] Cover entity %s not found (will retry)", self.name, self.cover)
+            elif (datetime.now() - self._last_cover_warning).total_seconds() > 60:
+                self._last_cover_warning = datetime.now()
+                _LOGGER.warning("[%s] Cover entity %s still not found", self.name, self.cover)
+            return False
+        return True
 
     async def _svc(self, service: str, data: Optional[dict] = None,
                    fallback: tuple[str, dict] | None = None):
