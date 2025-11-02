@@ -77,11 +77,10 @@ class ProfileController:
             _LOGGER.warning("Profile %s has no cover_entity_id; skipping", self.name)
             return
         
-        # Validate cover entity exists
+        # Validate cover entity exists (warning only, entity might load later)
         cover_state = self.hass.states.get(self.cover)
         if not cover_state:
-            _LOGGER.error("Profile %s: Cover entity %s not found; skipping", self.name, self.cover)
-            return
+            _LOGGER.warning("Profile %s: Cover entity %s not found yet (might load later)", self.name, self.cover)
         
         # Validate optional sensors exist
         if self.window:
