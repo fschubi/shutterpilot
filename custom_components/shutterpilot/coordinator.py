@@ -3,7 +3,7 @@ import logging
 from datetime import timedelta, datetime
 from typing import Optional
 
-from homeassistant.core import HomeAssistant, CALLBACK_TYPE, State
+from homeassistant.core import HomeAssistant, CALLBACK_TYPE
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_ON
 from homeassistant.helpers.event import (
@@ -12,7 +12,6 @@ from homeassistant.helpers.event import (
     async_track_sunset,
     async_track_time_interval,
 )
-from homeassistant.helpers import entity_component
 
 from .const import (
     CONF_GLOBAL_AUTO, CONF_DEFAULT_VPOS, CONF_DEFAULT_COOLDOWN,
@@ -24,12 +23,17 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 def _to_int(val, default):
-    try: return int(val)
-    except: return default
+    try:
+        return int(val)
+    except Exception:
+        return default
 
 def _to_float(val, default):
-    try: return float(val)
-    except: return default
+    try:
+        return float(val)
+    except Exception:
+        return default
+
 
 class ProfileController:
     """Controls one existing cover entity according to rules."""
@@ -67,13 +71,21 @@ class ProfileController:
 
         # Subscribe to events
         if self.window:
-            self._unsubs.append(async_track_state_change_event(self.hass, [self.window], self._on_window_change))
+            self._unsubs.append(
+                async_track_state_change_event(self.hass, [self.window], self._on_window_change)
+            )
         if self.door:
-            self._unsubs.append(async_track_state_change_event(self.hass, [self.door], self._on_door_change))
+            self._unsubs.append(
+                async_track_state_change_event(self.hass, [self.door], self._on_door_change)
+            )
         if self.lux_sensor:
-            self._unsubs.append(async_track_state_change_event(self.hass, [self.lux_sensor], self._on_env_change))
+            self._unsubs.append(
+                async_track_state_change_event(self.hass, [self.lux_sensor], self._on_env_change)
+            )
         if self.temp_sensor:
-            self._unsubs.append(async_track_state_change_event(self.hass, [self.temp_sensor], self._on_env_change))
+            self._unsubs.append(
+                async_track_state_change_event(self.hass, [self.temp_sensor], self._on_env_change)
+            )
 
         # sunrise/sunset + 10-min tick
         self._unsubs.append(async_track_sunrise(self.hass, self._on_sun_event))
@@ -87,16 +99,23 @@ class ProfileController:
 
     async def async_stop(self):
         for u in self._unsubs:
-            try: u()
-            except: pass
+            try:
+                u()
+            except Exception:
+                pass
         self._unsubs.clear()
 
     # ---------- public actions ----------
     async def open_cover(self):
-        await self._svc("cover.open_cover")
+        # bevorzugt open_cover, sonst Position 100
+        await self._svc(
+            "cover.open_cover",
+            fallback=("cover.set_cover_position", {"position": 100}),
+        )
 
     async def stop_cover(self):
-        await self._svc("cover.stop_cover")
+        # wenn stop_cover nicht da: noop
+        await self._svc("cover.stop_cover", fallback=None)
 
     async def close_cover_respecting_rules(self):
         # If door/window open -> only ventilation/max
@@ -105,7 +124,11 @@ class ProfileController:
         elif self._is_on(self.window):
             await self._set_pos(self.vpos)
         else:
-            await self._set_pos(self.night_pos)
+            # bevorzugt close_cover, sonst Position night_pos
+            await self._svc(
+                "cover.close_cover",
+                fallback=("cover.set_cover_position", {"position": int(self.night_pos)}),
+            )
 
     async def evaluate_policy_and_apply(self):
         """Compute policy and apply considering door/window/cooldown."""
@@ -135,13 +158,13 @@ class ProfileController:
             await self.open_cover()
             return
 
-        # Solar/env policy
+        # Solar/env policy (über sun.sun)
         sun_state = self.hass.states.get("sun.sun")
-        elevation = float(sun_state.attributes.get("elevation", 0)) if sun_state else 0
-        azimuth = float(sun_state.attributes.get("azimuth", 0)) if sun_state else 0
+        elevation = float(sun_state.attributes.get("elevation", 0)) if sun_state else 0.0
+        azimuth = float(sun_state.attributes.get("azimuth", 0)) if sun_state else 0.0
 
-        lux = self._float_state(self.lux_sensor, 0)
-        temp = self._float_state(self.temp_sensor, 0)
+        lux = self._float_state(self.lux_sensor, 0.0)
+        temp = self._float_state(self.temp_sensor, 0.0)
 
         in_az = (self.az_min <= azimuth <= self.az_max)
         should_shade = (elevation > 10 and in_az) and (lux >= self.lux_th or temp >= self.temp_th)
@@ -186,27 +209,42 @@ class ProfileController:
 
     # ---------- helpers ----------
     def _is_on(self, entity_id: Optional[str]) -> bool:
-        if not entity_id: return False
+        if not entity_id:
+            return False
         st = self.hass.states.get(entity_id)
         return bool(st and st.state == STATE_ON)
 
     def _float_state(self, entity_id: Optional[str], default: float) -> float:
-        if not entity_id: return default
+        if not entity_id:
+            return default
         st = self.hass.states.get(entity_id)
         try:
             return float(st.state)
-        except:
+        except Exception:
             return default
 
     def _auto_allowed(self) -> bool:
         opt = self.entry.options
         return bool(opt.get(CONF_GLOBAL_AUTO, True) and self.enabled)
 
-    async def _svc(self, service: str, data: Optional[dict]=None):
-        if not self.cover: return
-        data = data or {}
-        data["entity_id"] = self.cover
-        await self.hass.services.async_call(service.split(".")[0], service.split(".")[1], data, blocking=False)
+    async def _svc(self, service: str, data: Optional[dict] = None,
+                   fallback: tuple[str, dict] | None = None):
+        """Rufe einen Dienst auf; wenn nicht vorhanden, nutze optionalen Fallback."""
+        if not self.cover:
+            return
+        domain, srv = service.split(".")
+        if self.hass.services.has_service(domain, srv):
+            payload = dict(data or {})
+            payload["entity_id"] = self.cover
+            await self.hass.services.async_call(domain, srv, payload, blocking=False)
+            return
+
+        if fallback:
+            f_domain, f_srv = fallback[0].split(".")
+            f_data = dict(fallback[1])
+            f_data["entity_id"] = self.cover
+            if self.hass.services.has_service(f_domain, f_srv):
+                await self.hass.services.async_call(f_domain, f_srv, f_data, blocking=False)
 
     async def _set_pos(self, pos: int):
         pos = max(0, min(100, int(pos)))

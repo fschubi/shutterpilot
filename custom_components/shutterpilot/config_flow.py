@@ -44,7 +44,7 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             vol.Required(CONF_GLOBAL_AUTO, default=data.get(CONF_GLOBAL_AUTO, True)): bool,
             vol.Required(CONF_DEFAULT_VPOS, default=data.get(CONF_DEFAULT_VPOS, 30)): vol.All(int, vol.Range(min=0, max=80)),
             vol.Required(CONF_DEFAULT_COOLDOWN, default=data.get(CONF_DEFAULT_COOLDOWN, 120)): vol.All(int, vol.Range(min=0, max=900)),
-            vol.Optional("action", default="none"): vol.In(["none","add_profile","edit_profile","remove_profile"])
+            vol.Optional("action", default="none"): vol.In(["none", "add_profile", "edit_profile", "remove_profile"]),
         })
 
         if user_input is not None:
@@ -64,8 +64,8 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             # Speichern ohne Profil-Aktion
             return self.async_create_entry(title="", data={**self._base_opts, CONF_PROFILES: self._profiles})
 
-        desc = "Profile: " + (", ".join([p.get(P_NAME,"?") for p in self._profiles]) or "–")
-        return self.async_show_form(step_id="init", data_schema=menu, description=desc)
+        # WICHTIG: kein 'description' mehr verwenden → verursachte 500er
+        return self.async_show_form(step_id="init", data_schema=menu)
 
     # ---------- ADD ----------
     async def async_step_add_profile(self, user_input=None):
@@ -74,10 +74,10 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             vol.Required(P_COVER): str,         # entity_id: cover.xy
             vol.Optional(P_WINDOW, default=""): str,  # binary_sensor.xy
             vol.Optional(P_DOOR, default=""): str,    # binary_sensor.xy
-            vol.Required(P_DAY_POS, default=40): vol.All(int, vol.Range(min=0,max=100)),
-            vol.Required(P_NIGHT_POS, default=0): vol.All(int, vol.Range(min=0,max=100)),
-            vol.Required(P_VPOS, default=self._base_opts.get(CONF_DEFAULT_VPOS,30)): vol.All(int, vol.Range(min=0,max=80)),
-            vol.Required(P_DOOR_SAFE, default=30): vol.All(int, vol.Range(min=0,max=80)),
+            vol.Required(P_DAY_POS, default=40): vol.All(int, vol.Range(min=0, max=100)),
+            vol.Required(P_NIGHT_POS, default=0): vol.All(int, vol.Range(min=0, max=100)),
+            vol.Required(P_VPOS, default=self._base_opts.get(CONF_DEFAULT_VPOS, 30)): vol.All(int, vol.Range(min=0, max=80)),
+            vol.Required(P_DOOR_SAFE, default=30): vol.All(int, vol.Range(min=0, max=80)),
             vol.Optional(P_LUX, default=""): str,
             vol.Optional(P_TEMP, default=""): str,
             vol.Optional(P_LUX_TH, default=20000): vol.Coerce(float),
@@ -86,13 +86,13 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(P_AZ_MAX, default=360): vol.Coerce(float),
             vol.Optional(P_UP_TIME, default=""): str,     # "HH:MM"
             vol.Optional(P_DOWN_TIME, default=""): str,   # "HH:MM"
-            vol.Optional(P_COOLDOWN, default=self._base_opts.get(CONF_DEFAULT_COOLDOWN,120)): vol.All(int, vol.Range(min=0,max=1800)),
+            vol.Optional(P_COOLDOWN, default=self._base_opts.get(CONF_DEFAULT_COOLDOWN, 120)): vol.All(int, vol.Range(min=0, max=1800)),
             vol.Optional(P_ENABLED, default=True): bool,
         })
         if user_input is not None:
             prof = dict(user_input)
             # normalize empties -> None
-            for k in (P_WINDOW,P_DOOR,P_LUX,P_TEMP,P_UP_TIME,P_DOWN_TIME):
+            for k in (P_WINDOW, P_DOOR, P_LUX, P_TEMP, P_UP_TIME, P_DOWN_TIME):
                 prof[k] = _norm_empty(prof.get(k))
             self._profiles.append(prof)
             return await self.async_step_init()
@@ -102,8 +102,8 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
     async def async_step_remove_profile_select(self, user_input=None):
         if not self._profiles:
             return await self.async_step_init()
-        choices = {p.get(P_NAME,f"#{i}"): i for i,p in enumerate(self._profiles)}
-        schema = vol.Schema({ vol.Required("profile"): vol.In(list(choices.keys())) })
+        choices = {p.get(P_NAME, f"#{i}"): i for i, p in enumerate(self._profiles)}
+        schema = vol.Schema({vol.Required("profile"): vol.In(list(choices.keys()))})
         if user_input is not None:
             idx = choices[user_input["profile"]]
             self._profiles.pop(idx)
@@ -114,8 +114,8 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
     async def async_step_edit_profile_select(self, user_input=None):
         if not self._profiles:
             return await self.async_step_init()
-        choices = {p.get(P_NAME,f"#{i}"): i for i,p in enumerate(self._profiles)}
-        schema = vol.Schema({ vol.Required("profile"): vol.In(list(choices.keys())) })
+        choices = {p.get(P_NAME, f"#{i}"): i for i, p in enumerate(self._profiles)}
+        schema = vol.Schema({vol.Required("profile"): vol.In(list(choices.keys()))})
         if user_input is not None:
             self._edit_index = choices[user_input["profile"]]
             return await self.async_step_edit_profile_form()
@@ -128,28 +128,28 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
         cur = self._profiles[idx]
 
         schema = vol.Schema({
-            vol.Required(P_NAME, default=cur.get(P_NAME,"")): str,
-            vol.Required(P_COVER, default=cur.get(P_COVER,"")): str,
+            vol.Required(P_NAME, default=cur.get(P_NAME, "")): str,
+            vol.Required(P_COVER, default=cur.get(P_COVER, "")): str,
             vol.Optional(P_WINDOW, default=cur.get(P_WINDOW) or ""): str,
             vol.Optional(P_DOOR, default=cur.get(P_DOOR) or ""): str,
-            vol.Required(P_DAY_POS, default=cur.get(P_DAY_POS,40)): vol.All(int, vol.Range(min=0,max=100)),
-            vol.Required(P_NIGHT_POS, default=cur.get(P_NIGHT_POS,0)): vol.All(int, vol.Range(min=0,max=100)),
-            vol.Required(P_VPOS, default=cur.get(P_VPOS, self._base_opts.get(CONF_DEFAULT_VPOS,30))): vol.All(int, vol.Range(min=0,max=80)),
-            vol.Required(P_DOOR_SAFE, default=cur.get(P_DOOR_SAFE,30)): vol.All(int, vol.Range(min=0,max=80)),
+            vol.Required(P_DAY_POS, default=cur.get(P_DAY_POS, 40)): vol.All(int, vol.Range(min=0, max=100)),
+            vol.Required(P_NIGHT_POS, default=cur.get(P_NIGHT_POS, 0)): vol.All(int, vol.Range(min=0, max=100)),
+            vol.Required(P_VPOS, default=cur.get(P_VPOS, self._base_opts.get(CONF_DEFAULT_VPOS, 30))): vol.All(int, vol.Range(min=0, max=80)),
+            vol.Required(P_DOOR_SAFE, default=cur.get(P_DOOR_SAFE, 30)): vol.All(int, vol.Range(min=0, max=80)),
             vol.Optional(P_LUX, default=cur.get(P_LUX) or ""): str,
             vol.Optional(P_TEMP, default=cur.get(P_TEMP) or ""): str,
-            vol.Optional(P_LUX_TH, default=cur.get(P_LUX_TH,20000)): vol.Coerce(float),
-            vol.Optional(P_TEMP_TH, default=cur.get(P_TEMP_TH,26)): vol.Coerce(float),
-            vol.Optional(P_AZ_MIN, default=cur.get(P_AZ_MIN,-360)): vol.Coerce(float),
-            vol.Optional(P_AZ_MAX, default=cur.get(P_AZ_MAX,360)): vol.Coerce(float),
+            vol.Optional(P_LUX_TH, default=cur.get(P_LUX_TH, 20000)): vol.Coerce(float),
+            vol.Optional(P_TEMP_TH, default=cur.get(P_TEMP_TH, 26)): vol.Coerce(float),
+            vol.Optional(P_AZ_MIN, default=cur.get(P_AZ_MIN, -360)): vol.Coerce(float),
+            vol.Optional(P_AZ_MAX, default=cur.get(P_AZ_MAX, 360)): vol.Coerce(float),
             vol.Optional(P_UP_TIME, default=cur.get(P_UP_TIME) or ""): str,
             vol.Optional(P_DOWN_TIME, default=cur.get(P_DOWN_TIME) or ""): str,
-            vol.Optional(P_COOLDOWN, default=cur.get(P_COOLDOWN, self._base_opts.get(CONF_DEFAULT_COOLDOWN,120))): vol.All(int, vol.Range(min=0,max=1800)),
+            vol.Optional(P_COOLDOWN, default=cur.get(P_COOLDOWN, self._base_opts.get(CONF_DEFAULT_COOLDOWN, 120))): vol.All(int, vol.Range(min=0, max=1800)),
             vol.Optional(P_ENABLED, default=bool(cur.get(P_ENABLED, True))): bool,
         })
         if user_input is not None:
             newp = dict(user_input)
-            for k in (P_WINDOW,P_DOOR,P_LUX,P_TEMP,P_UP_TIME,P_DOWN_TIME):
+            for k in (P_WINDOW, P_DOOR, P_LUX, P_TEMP, P_UP_TIME, P_DOWN_TIME):
                 newp[k] = _norm_empty(newp.get(k))
             self._profiles[idx] = newp
             # zurück ins Hauptmenü
