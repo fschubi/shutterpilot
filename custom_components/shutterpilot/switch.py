@@ -88,7 +88,7 @@ class ShutterPilotGlobalAutoSwitch(SwitchEntity):
     async def async_added_to_hass(self):
         """When entity is added to hass."""
         self.async_on_remove(
-            self.entry.add_update_listener(lambda _: self.async_update_callback())
+            self.entry.add_update_listener(lambda hass, entry: self.async_update_callback())
         )
 
 
@@ -243,7 +243,7 @@ class ShutterPilotProfileSwitch(SwitchEntity):
     async def async_added_to_hass(self):
         """When entity is added to hass."""
         self.async_on_remove(
-            self.entry.add_update_listener(lambda _: self.async_update_callback())
+            self.entry.add_update_listener(lambda hass, entry: self.async_update_callback())
         )
 
 
@@ -353,5 +353,5 @@ class ShutterPilotProfileSwitchFromConfig(SwitchEntity):
     async def async_added_to_hass(self):
         """When entity is added to hass."""
         self.async_on_remove(
-            self.entry.add_update_listener(lambda _: self.async_update_callback())
+            self.entry.add_update_listener(lambda hass, entry: self.async_update_callback())
         )
