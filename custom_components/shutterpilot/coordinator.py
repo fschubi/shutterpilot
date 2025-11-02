@@ -11,7 +11,7 @@ from homeassistant.helpers.event import (
     async_track_sunrise,
     async_track_sunset,
     async_track_time_interval,
-    async_call_later,  # <- NEU: One-shot Timer für Cooldown-Ende
+    async_call_later,
 )
 
 from .const import (
@@ -63,7 +63,7 @@ class ProfileController:
         self.enabled = bool(cfg.get(P_ENABLED, True))
 
         self._cooldown_until: Optional[datetime] = None
-        self._cooldown_timer: Optional[CALLBACK_TYPE] = None  # <- NEU
+        self._cooldown_timer: Optional[CALLBACK_TYPE] = None
         self._unsubs: list[CALLBACK_TYPE] = []
 
     async def async_start(self):
@@ -73,34 +73,25 @@ class ProfileController:
 
         # Subscribe to events
         if self.window:
-            self._unsubs.append(
-                async_track_state_change_event(self.hass, [self.window], self._on_window_change)
-            )
+            self._unsubs.append(async_track_state_change_event(self.hass, [self.window], self._on_window_change))
         if self.door:
-            self._unsubs.append(
-                async_track_state_change_event(self.hass, [self.door], self._on_door_change)
-            )
+            self._unsubs.append(async_track_state_change_event(self.hass, [self.door], self._on_door_change))
         if self.lux_sensor:
-            self._unsubs.append(
-                async_track_state_change_event(self.hass, [self.lux_sensor], self._on_env_change)
-            )
+            self._unsubs.append(async_track_state_change_event(self.hass, [self.lux_sensor], self._on_env_change))
         if self.temp_sensor:
-            self._unsubs.append(
-                async_track_state_change_event(self.hass, [self.temp_sensor], self._on_env_change)
-            )
+            self._unsubs.append(async_track_state_change_event(self.hass, [self.temp_sensor], self._on_env_change))
 
-        # sunrise/sunset + Tick (lassen wir bei 10 Min., weil Cooldown jetzt aktiv gepuffert wird)
+        # sunrise/sunset + 1-min tick as safety net
         self._unsubs.append(async_track_sunrise(self.hass, self._on_sun_event))
         self._unsubs.append(async_track_sunset(self.hass, self._on_sun_event))
-        self._unsubs.append(async_track_time_interval(self.hass, self._on_tick, timedelta(minutes=10)))
+        self._unsubs.append(async_track_time_interval(self.hass, self._on_tick, timedelta(minutes=1)))
 
         # First evaluation
         await self.evaluate_policy_and_apply()
-
-        _LOGGER.info("Started profile '%s' for %s", self.name, self.cover)
+        _LOGGER.info("Started profile '%s' for %s (cooldown=%ss)", self.name, self.cover, self.cooldown)
 
     async def async_stop(self):
-        # Timer abbrechen
+        # cancel cooldown timer if any
         if self._cooldown_timer:
             try:
                 self._cooldown_timer()
@@ -117,58 +108,54 @@ class ProfileController:
 
     # ---------- public actions ----------
     async def open_cover(self):
-        # bevorzugt open_cover, sonst Position 100
-        await self._svc(
-            "cover.open_cover",
-            fallback=("cover.set_cover_position", {"position": 100}),
-        )
+        await self._svc("cover.open_cover", fallback=("cover.set_cover_position", {"position": 100}))
 
     async def stop_cover(self):
-        # wenn stop_cover nicht da: noop
         await self._svc("cover.stop_cover", fallback=None)
 
     async def close_cover_respecting_rules(self):
-        # If door/window open -> only ventilation/max
         if self._is_on(self.door):
             await self._set_pos(max(self.vpos, self.door_safe))
         elif self._is_on(self.window):
             await self._set_pos(self.vpos)
         else:
-            # bevorzugt close_cover, sonst Position night_pos
-            await self._svc(
-                "cover.close_cover",
-                fallback=("cover.set_cover_position", {"position": int(self.night_pos)}),
-            )
+            await self._svc("cover.close_cover", fallback=("cover.set_cover_position", {"position": int(self.night_pos)}))
 
     async def evaluate_policy_and_apply(self):
         """Compute policy and apply considering door/window/cooldown."""
         if not self._auto_allowed():
+            _LOGGER.debug("[%s] Auto disabled, skipping", self.name)
             return
 
         # if door open -> safe gap
         if self._is_on(self.door):
+            _LOGGER.debug("[%s] Door open → door_safe", self.name)
             await self._set_pos(max(self.vpos, self.door_safe))
             return
 
         # if window open -> ventilation
         if self._is_on(self.window):
+            _LOGGER.debug("[%s] Window open → ventilation", self.name)
             await self._set_pos(self.vpos)
             return
 
         # cooldown after window close -> wait out
         if self._cooldown_until and datetime.now() < self._cooldown_until:
+            left = (self._cooldown_until - datetime.now()).total_seconds()
+            _LOGGER.debug("[%s] Cooldown active (%.1fs left), skip", self.name, left)
             return
 
-        # Time-based up/down
         now_str = datetime.now().strftime("%H:%M")
         if self.down_time and now_str == self.down_time:
+            _LOGGER.debug("[%s] Time match down_time=%s → night_pos", self.name, self.down_time)
             await self._set_pos(self.night_pos)
             return
         if self.up_time and now_str == self.up_time:
+            _LOGGER.debug("[%s] Time match up_time=%s → open", self.name, self.up_time)
             await self.open_cover()
             return
 
-        # Solar/env policy (über sun.sun)
+        # Solar/env policy
         sun_state = self.hass.states.get("sun.sun")
         elevation = float(sun_state.attributes.get("elevation", 0)) if sun_state else 0.0
         azimuth = float(sun_state.attributes.get("azimuth", 0)) if sun_state else 0.0
@@ -180,10 +167,13 @@ class ProfileController:
         should_shade = (elevation > 10 and in_az) and (lux >= self.lux_th or temp >= self.temp_th)
 
         if elevation < 0:  # night
+            _LOGGER.debug("[%s] Night (elev=%.1f) → night_pos", self.name, elevation)
             await self._set_pos(self.night_pos)
         elif should_shade:
+            _LOGGER.debug("[%s] Shade (elev=%.1f, az=%.1f, lux=%.0f, temp=%.1f) → day_pos", self.name, elevation, azimuth, lux, temp)
             await self._set_pos(self.day_pos)
         else:
+            _LOGGER.debug("[%s] Default → open", self.name)
             await self.open_cover()
 
     # ---------- internal listeners ----------
@@ -193,19 +183,23 @@ class ProfileController:
 
         to_state = event.data.get("new_state")
         if to_state and to_state.state == STATE_ON:
-            # Fenster geöffnet -> Lüftung, Cooldown-Timer ggf. abbrechen
+            # window opened → ventilation; cancel any cooldown timer
             if self._cooldown_timer:
                 try:
                     self._cooldown_timer()
                 except Exception:
                     pass
                 self._cooldown_timer = None
+            self._cooldown_until = None
+            _LOGGER.debug("[%s] Window opened → ventilation pos=%s", self.name, self.vpos)
             await self._set_pos(self.vpos)
         else:
-            # Fenster geschlossen -> Cooldown setzen & One-shot Timer planen
-            self._cooldown_until = datetime.now() + timedelta(seconds=max(0, self.cooldown))
+            # window closed → plan cooldown
+            cd = max(0, int(self.cooldown))
+            self._cooldown_until = datetime.now() + timedelta(seconds=cd)
+            _LOGGER.debug("[%s] Window closed → start cooldown %ss (until %s)", self.name, cd, self._cooldown_until)
 
-            # vorhandenen Timer stoppen
+            # cancel existing timer if present
             if self._cooldown_timer:
                 try:
                     self._cooldown_timer()
@@ -213,21 +207,28 @@ class ProfileController:
                     pass
                 self._cooldown_timer = None
 
-            # nach Cooldown sofort neu bewerten
-            def _after(_now):
-                self._cooldown_timer = None
-                # async Task starten
+            if cd <= 1:
+                # fast path: evaluate immediately
+                self._cooldown_until = None
                 self.hass.async_create_task(self.evaluate_policy_and_apply())
+            else:
+                # schedule evaluation right after cooldown
+                def _after(_now):
+                    self._cooldown_timer = None
+                    self._cooldown_until = None
+                    self.hass.async_create_task(self.evaluate_policy_and_apply())
 
-            self._cooldown_timer = async_call_later(self.hass, max(0, self.cooldown), _after)
+                self._cooldown_timer = async_call_later(self.hass, cd, _after)
 
     async def _on_door_change(self, event):
         if not self._auto_allowed():
             return
         to_state = event.data.get("new_state")
         if to_state and to_state.state == STATE_ON:
+            _LOGGER.debug("[%s] Door opened → door_safe", self.name)
             await self._set_pos(max(self.vpos, self.door_safe))
         else:
+            _LOGGER.debug("[%s] Door closed → re-evaluate", self.name)
             await self.evaluate_policy_and_apply()
 
     async def _on_env_change(self, event):
@@ -261,7 +262,7 @@ class ProfileController:
 
     async def _svc(self, service: str, data: Optional[dict] = None,
                    fallback: tuple[str, dict] | None = None):
-        """Rufe einen Dienst auf; wenn nicht vorhanden, nutze optionalen Fallback."""
+        """Call a service; if not available, use optional fallback."""
         if not self.cover:
             return
         domain, srv = service.split(".")
@@ -279,5 +280,5 @@ class ProfileController:
                 await self.hass.services.async_call(f_domain, f_srv, f_data, blocking=False)
 
     async def _set_pos(self, pos: int):
-        pos = max(0, min(100, int(pos)))
+        pos = max(0, min(100, int(pos))))
         await self._svc("cover.set_cover_position", {"position": pos})
