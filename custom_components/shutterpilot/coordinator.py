@@ -280,5 +280,5 @@ class ProfileController:
                 await self.hass.services.async_call(f_domain, f_srv, f_data, blocking=False)
 
     async def _set_pos(self, pos: int):
-        pos = max(0, min(100, int(pos))))
+        pos = max(0, min(100, int(pos)))
         await self._svc("cover.set_cover_position", {"position": pos})
