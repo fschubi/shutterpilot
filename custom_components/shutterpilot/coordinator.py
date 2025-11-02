@@ -11,6 +11,7 @@ from homeassistant.helpers.event import (
     async_track_sunrise,
     async_track_sunset,
     async_track_time_interval,
+    async_call_later,  # <- NEU: One-shot Timer für Cooldown-Ende
 )
 
 from .const import (
@@ -62,6 +63,7 @@ class ProfileController:
         self.enabled = bool(cfg.get(P_ENABLED, True))
 
         self._cooldown_until: Optional[datetime] = None
+        self._cooldown_timer: Optional[CALLBACK_TYPE] = None  # <- NEU
         self._unsubs: list[CALLBACK_TYPE] = []
 
     async def async_start(self):
@@ -87,7 +89,7 @@ class ProfileController:
                 async_track_state_change_event(self.hass, [self.temp_sensor], self._on_env_change)
             )
 
-        # sunrise/sunset + 10-min tick
+        # sunrise/sunset + Tick (lassen wir bei 10 Min., weil Cooldown jetzt aktiv gepuffert wird)
         self._unsubs.append(async_track_sunrise(self.hass, self._on_sun_event))
         self._unsubs.append(async_track_sunset(self.hass, self._on_sun_event))
         self._unsubs.append(async_track_time_interval(self.hass, self._on_tick, timedelta(minutes=10)))
@@ -98,6 +100,14 @@ class ProfileController:
         _LOGGER.info("Started profile '%s' for %s", self.name, self.cover)
 
     async def async_stop(self):
+        # Timer abbrechen
+        if self._cooldown_timer:
+            try:
+                self._cooldown_timer()
+            except Exception:
+                pass
+            self._cooldown_timer = None
+
         for u in self._unsubs:
             try:
                 u()
@@ -180,13 +190,36 @@ class ProfileController:
     async def _on_window_change(self, event):
         if not self._auto_allowed():
             return
+
         to_state = event.data.get("new_state")
         if to_state and to_state.state == STATE_ON:
-            # window opened -> ventilation and start "hold"
+            # Fenster geöffnet -> Lüftung, Cooldown-Timer ggf. abbrechen
+            if self._cooldown_timer:
+                try:
+                    self._cooldown_timer()
+                except Exception:
+                    pass
+                self._cooldown_timer = None
             await self._set_pos(self.vpos)
         else:
-            # window closed -> start cooldown
-            self._cooldown_until = datetime.now() + timedelta(seconds=self.cooldown)
+            # Fenster geschlossen -> Cooldown setzen & One-shot Timer planen
+            self._cooldown_until = datetime.now() + timedelta(seconds=max(0, self.cooldown))
+
+            # vorhandenen Timer stoppen
+            if self._cooldown_timer:
+                try:
+                    self._cooldown_timer()
+                except Exception:
+                    pass
+                self._cooldown_timer = None
+
+            # nach Cooldown sofort neu bewerten
+            def _after(_now):
+                self._cooldown_timer = None
+                # async Task starten
+                self.hass.async_create_task(self.evaluate_policy_and_apply())
+
+            self._cooldown_timer = async_call_later(self.hass, max(0, self.cooldown), _after)
 
     async def _on_door_change(self, event):
         if not self._auto_allowed():
@@ -195,7 +228,6 @@ class ProfileController:
         if to_state and to_state.state == STATE_ON:
             await self._set_pos(max(self.vpos, self.door_safe))
         else:
-            # door closed -> allow normal evaluation
             await self.evaluate_policy_and_apply()
 
     async def _on_env_change(self, event):
