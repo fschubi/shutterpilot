@@ -1,5 +1,4 @@
 DOMAIN = "shutterpilot"
-DOMAIN = "shutterpilot"
 
 # Global config/options
 CONF_GLOBAL_AUTO = "global_auto"

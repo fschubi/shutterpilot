@@ -1,12 +1,16 @@
 all_down:
   name: Alle runter
+  description: Alle konfigurierten Rollläden herunterfahren (unter Berücksichtigung von Fenster-/Türlogik).
   target: {}
 all_up:
   name: Alle hoch
+  description: Alle konfigurierten Rollläden öffnen.
   target: {}
 stop:
   name: Stopp
+  description: Alle Rollläden sofort stoppen.
   target: {}
 recalculate_now:
-  name: Recalculate now
+  name: Sofort neu berechnen
+  description: Sofortige Neuberechnung aller Profile (umgeht Cooldown).
   target: {}

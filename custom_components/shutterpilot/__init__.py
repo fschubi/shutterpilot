@@ -12,7 +12,7 @@ from .coordinator import ProfileController
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SWITCH, Platform.NUMBER]  # UI-Entities
+PLATFORMS: list[Platform] = [Platform.SWITCH, Platform.NUMBER, Platform.SENSOR]  # UI-Entities
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up ShutterPilot from a config entry."""
@@ -70,4 +70,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 async def async_update_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle config entry update - reload to apply changes."""
+    _LOGGER.info("Config entry updated, reloading ShutterPilot integration")
     await hass.config_entries.async_reload(entry.entry_id)

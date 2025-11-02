@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import logging
 from datetime import timedelta, datetime
 from typing import Optional
@@ -65,11 +66,43 @@ class ProfileController:
         self._cooldown_until: Optional[datetime] = None
         self._cooldown_timer: Optional[CALLBACK_TYPE] = None
         self._unsubs: list[CALLBACK_TYPE] = []
+        
+        # Status tracking for sensors
+        self._last_action_reason: str = "unknown"
+        self._status: str = "inactive"
+        self._sensor_update_callbacks: list[CALLBACK_TYPE] = []
 
     async def async_start(self):
         if not self.cover:
             _LOGGER.warning("Profile %s has no cover_entity_id; skipping", self.name)
             return
+        
+        # Validate cover entity exists
+        cover_state = self.hass.states.get(self.cover)
+        if not cover_state:
+            _LOGGER.error("Profile %s: Cover entity %s not found; skipping", self.name, self.cover)
+            return
+        
+        # Validate optional sensors exist
+        if self.window:
+            window_state = self.hass.states.get(self.window)
+            if not window_state:
+                _LOGGER.warning("Profile %s: Window sensor %s not found; ignoring", self.name, self.window)
+        
+        if self.door:
+            door_state = self.hass.states.get(self.door)
+            if not door_state:
+                _LOGGER.warning("Profile %s: Door sensor %s not found; ignoring", self.name, self.door)
+        
+        if self.lux_sensor:
+            lux_state = self.hass.states.get(self.lux_sensor)
+            if not lux_state:
+                _LOGGER.warning("Profile %s: Lux sensor %s not found; ignoring", self.name, self.lux_sensor)
+        
+        if self.temp_sensor:
+            temp_state = self.hass.states.get(self.temp_sensor)
+            if not temp_state:
+                _LOGGER.warning("Profile %s: Temp sensor %s not found; ignoring", self.name, self.temp_sensor)
 
         # Subscribe to events
         if self.window:
@@ -87,6 +120,7 @@ class ProfileController:
         self._unsubs.append(async_track_time_interval(self.hass, self._on_tick, timedelta(minutes=1)))
 
         # First evaluation
+        self._update_status("active", "initialization")
         await self.evaluate_policy_and_apply()
         _LOGGER.info("Started profile '%s' for %s (cooldown=%ss)", self.name, self.cover, self.cooldown)
 
@@ -125,17 +159,20 @@ class ProfileController:
         """Compute policy and apply considering door/window/cooldown."""
         if not self._auto_allowed():
             _LOGGER.debug("[%s] Auto disabled, skipping", self.name)
+            self._update_status("inactive", "auto_disabled")
             return
 
         # if door open -> safe gap
         if self._is_on(self.door):
             _LOGGER.debug("[%s] Door open → door_safe", self.name)
+            self._update_status("active", "door_open")
             await self._set_pos(max(self.vpos, self.door_safe))
             return
 
         # if window open -> ventilation
         if self._is_on(self.window):
             _LOGGER.debug("[%s] Window open → ventilation", self.name)
+            self._update_status("active", "window_open")
             await self._set_pos(self.vpos)
             return
 
@@ -143,22 +180,35 @@ class ProfileController:
         if self._cooldown_until and datetime.now() < self._cooldown_until:
             left = (self._cooldown_until - datetime.now()).total_seconds()
             _LOGGER.debug("[%s] Cooldown active (%.1fs left), skip", self.name, left)
+            self._update_status("cooldown", "cooldown_active")
             return
 
-        now_str = datetime.now().strftime("%H:%M")
+        try:
+            now_str = datetime.now().strftime("%H:%M")
+        except Exception as ex:
+            _LOGGER.warning("[%s] Error getting current time: %s", self.name, ex)
+            now_str = ""
+        
         if self.down_time and now_str == self.down_time:
             _LOGGER.debug("[%s] Time match down_time=%s → night_pos", self.name, self.down_time)
+            self._update_status("active", "time_schedule_down")
             await self._set_pos(self.night_pos)
             return
         if self.up_time and now_str == self.up_time:
             _LOGGER.debug("[%s] Time match up_time=%s → open", self.name, self.up_time)
+            self._update_status("active", "time_schedule_up")
             await self.open_cover()
             return
 
         # Solar/env policy
         sun_state = self.hass.states.get("sun.sun")
-        elevation = float(sun_state.attributes.get("elevation", 0)) if sun_state else 0.0
-        azimuth = float(sun_state.attributes.get("azimuth", 0)) if sun_state else 0.0
+        try:
+            elevation = float(sun_state.attributes.get("elevation", 0)) if sun_state else 0.0
+            azimuth = float(sun_state.attributes.get("azimuth", 0)) if sun_state else 0.0
+        except (ValueError, TypeError, AttributeError) as ex:
+            _LOGGER.warning("[%s] Error reading sun data: %s; using defaults", self.name, ex)
+            elevation = 0.0
+            azimuth = 0.0
 
         lux = self._float_state(self.lux_sensor, 0.0)
         temp = self._float_state(self.temp_sensor, 0.0)
@@ -168,12 +218,20 @@ class ProfileController:
 
         if elevation < 0:  # night
             _LOGGER.debug("[%s] Night (elev=%.1f) → night_pos", self.name, elevation)
+            self._update_status("active", "night_mode")
             await self._set_pos(self.night_pos)
         elif should_shade:
+            reason = "sun_shade"
+            if lux >= self.lux_th:
+                reason = f"sun_shade_lux_{int(lux)}"
+            elif temp >= self.temp_th:
+                reason = f"sun_shade_temp_{temp:.1f}"
             _LOGGER.debug("[%s] Shade (elev=%.1f, az=%.1f, lux=%.0f, temp=%.1f) → day_pos", self.name, elevation, azimuth, lux, temp)
+            self._update_status("active", reason)
             await self._set_pos(self.day_pos)
         else:
             _LOGGER.debug("[%s] Default → open", self.name)
+            self._update_status("active", "default_open")
             await self.open_cover()
 
     # ---------- internal listeners ----------
@@ -192,12 +250,14 @@ class ProfileController:
                 self._cooldown_timer = None
             self._cooldown_until = None
             _LOGGER.debug("[%s] Window opened → ventilation pos=%s", self.name, self.vpos)
+            self._update_status("active", "window_opened")
             await self._set_pos(self.vpos)
         else:
             # window closed → plan cooldown
             cd = max(0, int(self.cooldown))
             self._cooldown_until = datetime.now() + timedelta(seconds=cd)
             _LOGGER.debug("[%s] Window closed → start cooldown %ss (until %s)", self.name, cd, self._cooldown_until)
+            self._update_status("cooldown", "window_closed_cooldown")
 
             # cancel existing timer if present
             if self._cooldown_timer:
@@ -216,9 +276,34 @@ class ProfileController:
                 def _after(_now):
                     self._cooldown_timer = None
                     self._cooldown_until = None
+                    self._update_status("active", "cooldown_expired")
                     self.hass.async_create_task(self.evaluate_policy_and_apply())
 
                 self._cooldown_timer = async_call_later(self.hass, cd, _after)
+                
+                # Trigger periodic updates during cooldown for sensors
+                # This ensures cooldown_remaining sensor updates regularly
+                async def _cooldown_ticker():
+                    update_interval = min(5, max(1, cd // 20))  # 5s or proportional to cooldown
+                    elapsed = 0
+                    while elapsed < cd and self._cooldown_until:
+                        await asyncio.sleep(update_interval)
+                        elapsed += update_interval
+                        if self._cooldown_until and datetime.now() < self._cooldown_until:
+                            # Trigger sensor update without changing reason
+                            for callback in self._sensor_update_callbacks:
+                                try:
+                                    callback()
+                                except Exception as ex:
+                                    _LOGGER.warning("[%s] Error in cooldown ticker callback: %s", self.name, ex)
+                        else:
+                            break
+                
+                # Start background task for periodic updates
+                try:
+                    self.hass.async_create_task(_cooldown_ticker())
+                except Exception as ex:
+                    _LOGGER.debug("[%s] Could not start cooldown ticker: %s", self.name, ex)
 
     async def _on_door_change(self, event):
         if not self._auto_allowed():
@@ -226,6 +311,7 @@ class ProfileController:
         to_state = event.data.get("new_state")
         if to_state and to_state.state == STATE_ON:
             _LOGGER.debug("[%s] Door opened → door_safe", self.name)
+            self._update_status("active", "door_opened")
             await self._set_pos(max(self.vpos, self.door_safe))
         else:
             _LOGGER.debug("[%s] Door closed → re-evaluate", self.name)
@@ -265,20 +351,71 @@ class ProfileController:
         """Call a service; if not available, use optional fallback."""
         if not self.cover:
             return
-        domain, srv = service.split(".")
-        if self.hass.services.has_service(domain, srv):
-            payload = dict(data or {})
-            payload["entity_id"] = self.cover
-            await self.hass.services.async_call(domain, srv, payload, blocking=False)
-            return
-
-        if fallback:
-            f_domain, f_srv = fallback[0].split(".")
-            f_data = dict(fallback[1])
-            f_data["entity_id"] = self.cover
-            if self.hass.services.has_service(f_domain, f_srv):
-                await self.hass.services.async_call(f_domain, f_srv, f_data, blocking=False)
+        
+        try:
+            domain, srv = service.split(".")
+            if self.hass.services.has_service(domain, srv):
+                payload = dict(data or {})
+                payload["entity_id"] = self.cover
+                await self.hass.services.async_call(domain, srv, payload, blocking=False)
+                return
+            elif fallback:
+                # Try fallback if primary service not available
+                f_domain, f_srv = fallback[0].split(".")
+                f_data = dict(fallback[1])
+                f_data["entity_id"] = self.cover
+                if self.hass.services.has_service(f_domain, f_srv):
+                    await self.hass.services.async_call(f_domain, f_srv, f_data, blocking=False)
+                else:
+                    _LOGGER.warning("[%s] Neither %s nor fallback %s available for %s", 
+                                  self.name, service, fallback[0], self.cover)
+            else:
+                _LOGGER.warning("[%s] Service %s not available for %s", 
+                              self.name, service, self.cover)
+        except Exception as ex:
+            _LOGGER.exception("[%s] Error calling service %s for %s: %s", 
+                           self.name, service, self.cover, ex)
 
     async def _set_pos(self, pos: int):
         pos = max(0, min(100, int(pos)))
         await self._svc("cover.set_cover_position", {"position": pos})
+    
+    # ---------- Status tracking helpers ----------
+    def _update_status(self, status: str, reason: str):
+        """Update status and trigger sensor callbacks."""
+        self._status = status
+        self._last_action_reason = reason
+        # Trigger all sensor update callbacks
+        for callback in self._sensor_update_callbacks:
+            try:
+                callback()
+            except Exception as ex:
+                _LOGGER.warning("[%s] Error in sensor update callback: %s", self.name, ex)
+    
+    def register_sensor_callback(self, callback: CALLBACK_TYPE):
+        """Register a callback to be called when status updates."""
+        self._sensor_update_callbacks.append(callback)
+    
+    def get_status(self) -> str:
+        """Get current status."""
+        return self._status
+    
+    def get_last_action_reason(self) -> str:
+        """Get last action reason."""
+        return self._last_action_reason
+    
+    def get_cooldown_remaining(self) -> float:
+        """Get remaining cooldown time in seconds."""
+        if self._cooldown_until and datetime.now() < self._cooldown_until:
+            return (self._cooldown_until - datetime.now()).total_seconds()
+        return 0.0
+    
+    def get_sun_data(self) -> tuple[float, float]:
+        """Get current sun elevation and azimuth."""
+        sun_state = self.hass.states.get("sun.sun")
+        try:
+            elevation = float(sun_state.attributes.get("elevation", 0)) if sun_state else 0.0
+            azimuth = float(sun_state.attributes.get("azimuth", 0)) if sun_state else 0.0
+            return (elevation, azimuth)
+        except (ValueError, TypeError, AttributeError):
+            return (0.0, 0.0)

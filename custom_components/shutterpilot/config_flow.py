@@ -10,6 +10,22 @@ def _opt(entry):
 def _norm_empty(val):
     return None if (val is None or str(val).strip() == "") else val
 
+def _validate_time(val):
+    """Validate time format HH:MM."""
+    if not val or val.strip() == "":
+        return None
+    try:
+        parts = val.strip().split(":")
+        if len(parts) != 2:
+            raise ValueError("Invalid format")
+        hour = int(parts[0])
+        minute = int(parts[1])
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            raise ValueError("Time out of range")
+        return f"{hour:02d}:{minute:02d}"
+    except (ValueError, AttributeError):
+        return None
+
 class ShutterPilotConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
@@ -92,8 +108,22 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             prof = dict(user_input)
             # normalize empties -> None
-            for k in (P_WINDOW, P_DOOR, P_LUX, P_TEMP, P_UP_TIME, P_DOWN_TIME):
+            for k in (P_WINDOW, P_DOOR, P_LUX, P_TEMP):
                 prof[k] = _norm_empty(prof.get(k))
+            # validate and normalize time fields
+            for k in (P_UP_TIME, P_DOWN_TIME):
+                val = prof.get(k)
+                if val:
+                    normalized = _validate_time(val)
+                    if normalized is None:
+                        return self.async_show_form(
+                            step_id="add_profile",
+                            data_schema=schema,
+                            errors={k: "Ungültiges Zeitformat (erwartet: HH:MM)"}
+                        )
+                    prof[k] = normalized
+                else:
+                    prof[k] = None
             self._profiles.append(prof)
             return await self.async_step_init()
         return self.async_show_form(step_id="add_profile", data_schema=schema)
@@ -149,8 +179,23 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
         })
         if user_input is not None:
             newp = dict(user_input)
-            for k in (P_WINDOW, P_DOOR, P_LUX, P_TEMP, P_UP_TIME, P_DOWN_TIME):
+            # normalize empties -> None
+            for k in (P_WINDOW, P_DOOR, P_LUX, P_TEMP):
                 newp[k] = _norm_empty(newp.get(k))
+            # validate and normalize time fields
+            for k in (P_UP_TIME, P_DOWN_TIME):
+                val = newp.get(k)
+                if val:
+                    normalized = _validate_time(val)
+                    if normalized is None:
+                        return self.async_show_form(
+                            step_id="edit_profile_form",
+                            data_schema=schema,
+                            errors={k: "Ungültiges Zeitformat (erwartet: HH:MM)"}
+                        )
+                    newp[k] = normalized
+                else:
+                    newp[k] = None
             self._profiles[idx] = newp
             # zurück ins Hauptmenü
             return await self.async_step_init()
