@@ -7,11 +7,8 @@
         "description": "Configure the global default settings for ShutterPilot.",
         "data": {
           "global_auto": "Enable automation globally",
-          "global_auto_description": "Activates automatic control of all shutters",
           "default_ventilation_position": "Default ventilation position (%)",
-          "default_ventilation_position_description": "Default position for ventilation when windows are open (0-80%)",
-          "default_cooldown": "Default cooldown (sec)",
-          "default_cooldown_description": "Wait time after window closing before shutters are moved (0-900 seconds)"
+          "default_cooldown": "Default cooldown (sec)"
         }
       }
     },
@@ -35,12 +32,6 @@
           "default_ventilation_position": "Default position for ventilation when windows are open (0-80%)",
           "default_cooldown": "Wait time after window closing (0-900 seconds)",
           "action": "Select a profile action"
-        },
-        "menu_options": {
-          "none": "No action (save only)",
-          "add_profile": "Add new profile",
-          "edit_profile": "Edit profile",
-          "remove_profile": "Remove profile"
         }
       },
       "add_profile": {
@@ -164,6 +155,16 @@
     },
     "error": {
       "invalid_time_format": "Invalid time format (expected: HH:MM)"
+    }
+  },
+  "selector": {
+    "action": {
+      "options": {
+        "none": "No action (save only)",
+        "add_profile": "Add new profile",
+        "edit_profile": "Edit profile",
+        "remove_profile": "Remove profile"
+      }
     }
   },
   "entity": {

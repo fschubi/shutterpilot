@@ -7,11 +7,8 @@
         "description": "Konfigurieren Sie die globalen Standardeinstellungen für ShutterPilot.",
         "data": {
           "global_auto": "Automatik global aktiv",
-          "global_auto_description": "Aktiviert die automatische Steuerung aller Rollläden",
           "default_ventilation_position": "Standard Lüftungsposition (%)",
-          "default_ventilation_position_description": "Standardposition für die Lüftung bei geöffneten Fenstern (0-80%)",
-          "default_cooldown": "Standard Cooldown (Sek.)",
-          "default_cooldown_description": "Wartezeit nach Fensterschließung, bevor Rollläden bewegt werden (0-900 Sekunden)"
+          "default_cooldown": "Standard Cooldown (Sek.)"
         }
       }
     },
@@ -35,12 +32,6 @@
           "default_ventilation_position": "Standardposition für die Lüftung bei geöffneten Fenstern (0-80%)",
           "default_cooldown": "Wartezeit nach Fensterschließung (0-900 Sekunden)",
           "action": "Wählen Sie eine Profil-Aktion aus"
-        },
-        "menu_options": {
-          "none": "Keine Aktion (nur speichern)",
-          "add_profile": "Neues Profil hinzufügen",
-          "edit_profile": "Profil bearbeiten",
-          "remove_profile": "Profil löschen"
         }
       },
       "add_profile": {
@@ -164,6 +155,16 @@
     },
     "error": {
       "invalid_time_format": "Ungültiges Zeitformat (erwartet: HH:MM)"
+    }
+  },
+  "selector": {
+    "action": {
+      "options": {
+        "none": "Keine Aktion (nur speichern)",
+        "add_profile": "Neues Profil hinzufügen",
+        "edit_profile": "Profil bearbeiten",
+        "remove_profile": "Profil löschen"
+      }
     }
   },
   "entity": {
