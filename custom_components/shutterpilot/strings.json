@@ -4,24 +4,218 @@
     "step": {
       "user": {
         "title": "ShutterPilot einrichten",
-        "description": "Globale Standardwerte",
+        "description": "Konfigurieren Sie die globalen Standardeinstellungen für ShutterPilot.",
         "data": {
           "global_auto": "Automatik global aktiv",
+          "global_auto_description": "Aktiviert die automatische Steuerung aller Rollläden",
           "default_ventilation_position": "Standard Lüftungsposition (%)",
-          "default_cooldown": "Cooldown nach Fenster-zu (Sek.)"
+          "default_ventilation_position_description": "Standardposition für die Lüftung bei geöffneten Fenstern (0-80%)",
+          "default_cooldown": "Standard Cooldown (Sek.)",
+          "default_cooldown_description": "Wartezeit nach Fensterschließung, bevor Rollläden bewegt werden (0-900 Sekunden)"
         }
       }
+    },
+    "abort": {
+      "already_configured": "ShutterPilot ist bereits konfiguriert"
     }
   },
   "options": {
     "step": {
       "init": {
+        "title": "ShutterPilot Optionen",
+        "description": "Globale Einstellungen und Profilverwaltung",
         "data": {
           "global_auto": "Automatik global aktiv",
           "default_ventilation_position": "Standard Lüftungsposition (%)",
-          "default_cooldown": "Cooldown nach Fenster-zu (Sek.)"
+          "default_cooldown": "Standard Cooldown (Sek.)",
+          "action": "Aktion"
+        },
+        "data_description": {
+          "global_auto": "Aktiviert die automatische Steuerung aller Rollläden",
+          "default_ventilation_position": "Standardposition für die Lüftung bei geöffneten Fenstern (0-80%)",
+          "default_cooldown": "Wartezeit nach Fensterschließung (0-900 Sekunden)",
+          "action": "Wählen Sie eine Profil-Aktion aus"
+        },
+        "menu_options": {
+          "none": "Keine Aktion (nur speichern)",
+          "add_profile": "Neues Profil hinzufügen",
+          "edit_profile": "Profil bearbeiten",
+          "remove_profile": "Profil löschen"
+        }
+      },
+      "add_profile": {
+        "title": "Neues Profil hinzufügen",
+        "description": "Erstellen Sie ein neues Rollladenprofil mit individuellen Einstellungen.",
+        "data": {
+          "name": "Profilname",
+          "cover_entity_id": "Rolllade (Cover)",
+          "window_sensor": "Fenstersensor (optional)",
+          "door_sensor": "Türsensor (optional)",
+          "day_position": "Tagesposition (%)",
+          "night_position": "Nachtposition (%)",
+          "vent_position": "Lüftungsposition (%)",
+          "door_safe_position": "Sichere Position bei offener Tür (%)",
+          "lux_sensor": "Helligkeitssensor (optional)",
+          "temp_sensor": "Temperatursensor (optional)",
+          "lux_threshold": "Helligkeits-Schwellwert (lx)",
+          "temp_threshold": "Temperatur-Schwellwert (°C)",
+          "azimuth_min": "Azimut Minimum (°)",
+          "azimuth_max": "Azimut Maximum (°)",
+          "up_time": "Hochfahrzeit (HH:MM, optional)",
+          "down_time": "Runterfahrzeit (HH:MM, optional)",
+          "cooldown_sec": "Cooldown (Sekunden)",
+          "enabled": "Profil aktiviert",
+          "light_entity": "Licht-Entität (optional)",
+          "light_brightness": "Lichthelligkeit (%)",
+          "light_on_shade": "Licht bei Beschattung einschalten",
+          "light_on_night": "Licht bei Nachtmodus einschalten"
+        },
+        "data_description": {
+          "name": "Eindeutiger Name für dieses Profil",
+          "cover_entity_id": "Die zu steuernde Rolllade",
+          "window_sensor": "Fenstersensor zur Überwachung des Fensterstatus",
+          "door_sensor": "Türsensor zur Überwachung des Türstatus",
+          "day_position": "Rollladenposition tagsüber (0-100%)",
+          "night_position": "Rollladenposition nachts/bei Sonnenuntergang (0-100%)",
+          "vent_position": "Position bei geöffnetem Fenster (0-80%)",
+          "door_safe_position": "Position bei offener Tür für Durchgang (0-80%)",
+          "lux_sensor": "Sensor zur Messung der Helligkeit (für Beschattungsautomatik)",
+          "temp_sensor": "Sensor zur Messung der Temperatur (für Beschattungsautomatik)",
+          "lux_threshold": "Helligkeitswert ab dem beschattet wird (z.B. 20000 lx)",
+          "temp_threshold": "Temperatur ab der beschattet wird (z.B. 26°C)",
+          "azimuth_min": "Minimaler Sonnenwinkel für Beschattung (-360° bis 360°)",
+          "azimuth_max": "Maximaler Sonnenwinkel für Beschattung (-360° bis 360°)",
+          "up_time": "Feste Zeit zum Hochfahren (Format: HH:MM, z.B. 07:00)",
+          "down_time": "Feste Zeit zum Runterfahren (Format: HH:MM, z.B. 22:00)",
+          "cooldown_sec": "Wartezeit nach manuellen Änderungen (0-1800 Sekunden)",
+          "enabled": "Profil ist aktiv und wird ausgeführt",
+          "light_entity": "Licht, das bei Rollladenbewegung gesteuert wird",
+          "light_brightness": "Helligkeit des Lichts beim Einschalten (0-100%)",
+          "light_on_shade": "Licht beim Beschatten einschalten",
+          "light_on_night": "Licht im Nachtmodus einschalten"
+        }
+      },
+      "edit_profile_select": {
+        "title": "Profil zum Bearbeiten auswählen",
+        "description": "Wählen Sie das Profil aus, das Sie bearbeiten möchten.",
+        "data": {
+          "profile": "Profil"
+        }
+      },
+      "edit_profile_form": {
+        "title": "Profil bearbeiten",
+        "description": "Bearbeiten Sie die Einstellungen für das ausgewählte Profil.",
+        "data": {
+          "name": "Profilname",
+          "cover_entity_id": "Rolllade (Cover)",
+          "window_sensor": "Fenstersensor (optional)",
+          "door_sensor": "Türsensor (optional)",
+          "day_position": "Tagesposition (%)",
+          "night_position": "Nachtposition (%)",
+          "vent_position": "Lüftungsposition (%)",
+          "door_safe_position": "Sichere Position bei offener Tür (%)",
+          "lux_sensor": "Helligkeitssensor (optional)",
+          "temp_sensor": "Temperatursensor (optional)",
+          "lux_threshold": "Helligkeits-Schwellwert (lx)",
+          "temp_threshold": "Temperatur-Schwellwert (°C)",
+          "azimuth_min": "Azimut Minimum (°)",
+          "azimuth_max": "Azimut Maximum (°)",
+          "up_time": "Hochfahrzeit (HH:MM, optional)",
+          "down_time": "Runterfahrzeit (HH:MM, optional)",
+          "cooldown_sec": "Cooldown (Sekunden)",
+          "enabled": "Profil aktiviert",
+          "light_entity": "Licht-Entität (optional)",
+          "light_brightness": "Lichthelligkeit (%)",
+          "light_on_shade": "Licht bei Beschattung einschalten",
+          "light_on_night": "Licht bei Nachtmodus einschalten"
+        },
+        "data_description": {
+          "name": "Eindeutiger Name für dieses Profil",
+          "cover_entity_id": "Die zu steuernde Rolllade",
+          "window_sensor": "Fenstersensor zur Überwachung des Fensterstatus",
+          "door_sensor": "Türsensor zur Überwachung des Türstatus",
+          "day_position": "Rollladenposition tagsüber (0-100%)",
+          "night_position": "Rollladenposition nachts/bei Sonnenuntergang (0-100%)",
+          "vent_position": "Position bei geöffnetem Fenster (0-80%)",
+          "door_safe_position": "Position bei offener Tür für Durchgang (0-80%)",
+          "lux_sensor": "Sensor zur Messung der Helligkeit (für Beschattungsautomatik)",
+          "temp_sensor": "Sensor zur Messung der Temperatur (für Beschattungsautomatik)",
+          "lux_threshold": "Helligkeitswert ab dem beschattet wird (z.B. 20000 lx)",
+          "temp_threshold": "Temperatur ab der beschattet wird (z.B. 26°C)",
+          "azimuth_min": "Minimaler Sonnenwinkel für Beschattung (-360° bis 360°)",
+          "azimuth_max": "Maximaler Sonnenwinkel für Beschattung (-360° bis 360°)",
+          "up_time": "Feste Zeit zum Hochfahren (Format: HH:MM, z.B. 07:00)",
+          "down_time": "Feste Zeit zum Runterfahren (Format: HH:MM, z.B. 22:00)",
+          "cooldown_sec": "Wartezeit nach manuellen Änderungen (0-1800 Sekunden)",
+          "enabled": "Profil ist aktiv und wird ausgeführt",
+          "light_entity": "Licht, das bei Rollladenbewegung gesteuert wird",
+          "light_brightness": "Helligkeit des Lichts beim Einschalten (0-100%)",
+          "light_on_shade": "Licht beim Beschatten einschalten",
+          "light_on_night": "Licht im Nachtmodus einschalten"
+        }
+      },
+      "remove_profile_select": {
+        "title": "Profil zum Löschen auswählen",
+        "description": "Wählen Sie das Profil aus, das Sie löschen möchten. Diese Aktion kann nicht rückgängig gemacht werden.",
+        "data": {
+          "profile": "Profil"
         }
       }
+    },
+    "error": {
+      "invalid_time_format": "Ungültiges Zeitformat (erwartet: HH:MM)"
+    }
+  },
+  "entity": {
+    "switch": {
+      "global_automation": {
+        "name": "Globale Automatik"
+      },
+      "profile_automation": {
+        "name": "{profile_name} Automatik"
+      }
+    },
+    "number": {
+      "default_ventilation_position": {
+        "name": "Standard Lüftungsposition"
+      }
+    },
+    "sensor": {
+      "profile_status": {
+        "name": "{profile_name} Status",
+        "state": {
+          "active": "Aktiv",
+          "inactive": "Inaktiv",
+          "cooldown": "Cooldown"
+        }
+      },
+      "profile_last_action": {
+        "name": "{profile_name} Letzte Aktion"
+      },
+      "profile_cooldown_remaining": {
+        "name": "{profile_name} Verbleibender Cooldown"
+      },
+      "profile_sun_elevation": {
+        "name": "{profile_name} Sonnenhöhe"
+      }
+    }
+  },
+  "services": {
+    "all_up": {
+      "name": "Alle hoch",
+      "description": "Alle konfigurierten Rollläden öffnen."
+    },
+    "all_down": {
+      "name": "Alle runter",
+      "description": "Alle konfigurierten Rollläden herunterfahren (unter Berücksichtigung von Fenster-/Türlogik)."
+    },
+    "stop": {
+      "name": "Stopp",
+      "description": "Alle Rollläden sofort stoppen."
+    },
+    "recalculate_now": {
+      "name": "Sofort neu berechnen",
+      "description": "Sofortige Neuberechnung aller Profile (umgeht Cooldown)."
     }
   }
 }

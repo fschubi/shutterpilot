@@ -4,24 +4,218 @@
     "step": {
       "user": {
         "title": "Set up ShutterPilot",
-        "description": "Global defaults",
+        "description": "Configure the global default settings for ShutterPilot.",
         "data": {
           "global_auto": "Enable automation globally",
+          "global_auto_description": "Activates automatic control of all shutters",
           "default_ventilation_position": "Default ventilation position (%)",
-          "default_cooldown": "Cooldown after window closed (sec)"
+          "default_ventilation_position_description": "Default position for ventilation when windows are open (0-80%)",
+          "default_cooldown": "Default cooldown (sec)",
+          "default_cooldown_description": "Wait time after window closing before shutters are moved (0-900 seconds)"
         }
       }
+    },
+    "abort": {
+      "already_configured": "ShutterPilot is already configured"
     }
   },
   "options": {
     "step": {
       "init": {
+        "title": "ShutterPilot Options",
+        "description": "Global settings and profile management",
         "data": {
           "global_auto": "Enable automation globally",
           "default_ventilation_position": "Default ventilation position (%)",
-          "default_cooldown": "Cooldown after window closed (sec)"
+          "default_cooldown": "Default cooldown (sec)",
+          "action": "Action"
+        },
+        "data_description": {
+          "global_auto": "Activates automatic control of all shutters",
+          "default_ventilation_position": "Default position for ventilation when windows are open (0-80%)",
+          "default_cooldown": "Wait time after window closing (0-900 seconds)",
+          "action": "Select a profile action"
+        },
+        "menu_options": {
+          "none": "No action (save only)",
+          "add_profile": "Add new profile",
+          "edit_profile": "Edit profile",
+          "remove_profile": "Remove profile"
+        }
+      },
+      "add_profile": {
+        "title": "Add New Profile",
+        "description": "Create a new shutter profile with individual settings.",
+        "data": {
+          "name": "Profile name",
+          "cover_entity_id": "Shutter (Cover)",
+          "window_sensor": "Window sensor (optional)",
+          "door_sensor": "Door sensor (optional)",
+          "day_position": "Day position (%)",
+          "night_position": "Night position (%)",
+          "vent_position": "Ventilation position (%)",
+          "door_safe_position": "Safe position when door open (%)",
+          "lux_sensor": "Brightness sensor (optional)",
+          "temp_sensor": "Temperature sensor (optional)",
+          "lux_threshold": "Brightness threshold (lx)",
+          "temp_threshold": "Temperature threshold (°C)",
+          "azimuth_min": "Azimuth minimum (°)",
+          "azimuth_max": "Azimuth maximum (°)",
+          "up_time": "Open time (HH:MM, optional)",
+          "down_time": "Close time (HH:MM, optional)",
+          "cooldown_sec": "Cooldown (seconds)",
+          "enabled": "Profile enabled",
+          "light_entity": "Light entity (optional)",
+          "light_brightness": "Light brightness (%)",
+          "light_on_shade": "Turn on light during shading",
+          "light_on_night": "Turn on light during night mode"
+        },
+        "data_description": {
+          "name": "Unique name for this profile",
+          "cover_entity_id": "The shutter to control",
+          "window_sensor": "Window sensor to monitor window status",
+          "door_sensor": "Door sensor to monitor door status",
+          "day_position": "Shutter position during daytime (0-100%)",
+          "night_position": "Shutter position at night/after sunset (0-100%)",
+          "vent_position": "Position when window is open (0-80%)",
+          "door_safe_position": "Position when door is open for passage (0-80%)",
+          "lux_sensor": "Sensor for measuring brightness (for shading automation)",
+          "temp_sensor": "Sensor for measuring temperature (for shading automation)",
+          "lux_threshold": "Brightness value at which shading begins (e.g. 20000 lx)",
+          "temp_threshold": "Temperature at which shading begins (e.g. 26°C)",
+          "azimuth_min": "Minimum sun angle for shading (-360° to 360°)",
+          "azimuth_max": "Maximum sun angle for shading (-360° to 360°)",
+          "up_time": "Fixed time to open (Format: HH:MM, e.g. 07:00)",
+          "down_time": "Fixed time to close (Format: HH:MM, e.g. 22:00)",
+          "cooldown_sec": "Wait time after manual changes (0-1800 seconds)",
+          "enabled": "Profile is active and will be executed",
+          "light_entity": "Light to control when shutter moves",
+          "light_brightness": "Brightness of light when turning on (0-100%)",
+          "light_on_shade": "Turn on light during shading",
+          "light_on_night": "Turn on light during night mode"
+        }
+      },
+      "edit_profile_select": {
+        "title": "Select Profile to Edit",
+        "description": "Choose the profile you want to edit.",
+        "data": {
+          "profile": "Profile"
+        }
+      },
+      "edit_profile_form": {
+        "title": "Edit Profile",
+        "description": "Edit the settings for the selected profile.",
+        "data": {
+          "name": "Profile name",
+          "cover_entity_id": "Shutter (Cover)",
+          "window_sensor": "Window sensor (optional)",
+          "door_sensor": "Door sensor (optional)",
+          "day_position": "Day position (%)",
+          "night_position": "Night position (%)",
+          "vent_position": "Ventilation position (%)",
+          "door_safe_position": "Safe position when door open (%)",
+          "lux_sensor": "Brightness sensor (optional)",
+          "temp_sensor": "Temperature sensor (optional)",
+          "lux_threshold": "Brightness threshold (lx)",
+          "temp_threshold": "Temperature threshold (°C)",
+          "azimuth_min": "Azimuth minimum (°)",
+          "azimuth_max": "Azimuth maximum (°)",
+          "up_time": "Open time (HH:MM, optional)",
+          "down_time": "Close time (HH:MM, optional)",
+          "cooldown_sec": "Cooldown (seconds)",
+          "enabled": "Profile enabled",
+          "light_entity": "Light entity (optional)",
+          "light_brightness": "Light brightness (%)",
+          "light_on_shade": "Turn on light during shading",
+          "light_on_night": "Turn on light during night mode"
+        },
+        "data_description": {
+          "name": "Unique name for this profile",
+          "cover_entity_id": "The shutter to control",
+          "window_sensor": "Window sensor to monitor window status",
+          "door_sensor": "Door sensor to monitor door status",
+          "day_position": "Shutter position during daytime (0-100%)",
+          "night_position": "Shutter position at night/after sunset (0-100%)",
+          "vent_position": "Position when window is open (0-80%)",
+          "door_safe_position": "Position when door is open for passage (0-80%)",
+          "lux_sensor": "Sensor for measuring brightness (for shading automation)",
+          "temp_sensor": "Sensor for measuring temperature (for shading automation)",
+          "lux_threshold": "Brightness value at which shading begins (e.g. 20000 lx)",
+          "temp_threshold": "Temperature at which shading begins (e.g. 26°C)",
+          "azimuth_min": "Minimum sun angle for shading (-360° to 360°)",
+          "azimuth_max": "Maximum sun angle for shading (-360° to 360°)",
+          "up_time": "Fixed time to open (Format: HH:MM, e.g. 07:00)",
+          "down_time": "Fixed time to close (Format: HH:MM, e.g. 22:00)",
+          "cooldown_sec": "Wait time after manual changes (0-1800 seconds)",
+          "enabled": "Profile is active and will be executed",
+          "light_entity": "Light to control when shutter moves",
+          "light_brightness": "Brightness of light when turning on (0-100%)",
+          "light_on_shade": "Turn on light during shading",
+          "light_on_night": "Turn on light during night mode"
+        }
+      },
+      "remove_profile_select": {
+        "title": "Select Profile to Remove",
+        "description": "Choose the profile you want to delete. This action cannot be undone.",
+        "data": {
+          "profile": "Profile"
         }
       }
+    },
+    "error": {
+      "invalid_time_format": "Invalid time format (expected: HH:MM)"
+    }
+  },
+  "entity": {
+    "switch": {
+      "global_automation": {
+        "name": "Global Automation"
+      },
+      "profile_automation": {
+        "name": "{profile_name} Automation"
+      }
+    },
+    "number": {
+      "default_ventilation_position": {
+        "name": "Default Ventilation Position"
+      }
+    },
+    "sensor": {
+      "profile_status": {
+        "name": "{profile_name} Status",
+        "state": {
+          "active": "Active",
+          "inactive": "Inactive",
+          "cooldown": "Cooldown"
+        }
+      },
+      "profile_last_action": {
+        "name": "{profile_name} Last Action"
+      },
+      "profile_cooldown_remaining": {
+        "name": "{profile_name} Cooldown Remaining"
+      },
+      "profile_sun_elevation": {
+        "name": "{profile_name} Sun Elevation"
+      }
+    }
+  },
+  "services": {
+    "all_up": {
+      "name": "All Up",
+      "description": "Open all configured shutters."
+    },
+    "all_down": {
+      "name": "All Down",
+      "description": "Close all configured shutters (respecting window/door logic)."
+    },
+    "stop": {
+      "name": "Stop",
+      "description": "Stop all shutters immediately."
+    },
+    "recalculate_now": {
+      "name": "Recalculate Now",
+      "description": "Immediate recalculation of all profiles (bypasses cooldown)."
     }
   }
 }
