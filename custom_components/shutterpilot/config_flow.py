@@ -2,6 +2,7 @@ from __future__ import annotations
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.helpers import selector
 from .const import *
 
 def _opt(entry):
@@ -87,15 +88,25 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
     async def async_step_add_profile(self, user_input=None):
         schema = vol.Schema({
             vol.Required(P_NAME): str,
-            vol.Required(P_COVER): str,         # entity_id: cover.xy
-            vol.Optional(P_WINDOW, default=""): str,  # binary_sensor.xy
-            vol.Optional(P_DOOR, default=""): str,    # binary_sensor.xy
+            vol.Required(P_COVER): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="cover")
+            ),
+            vol.Optional(P_WINDOW): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
+            vol.Optional(P_DOOR): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
             vol.Required(P_DAY_POS, default=40): vol.All(int, vol.Range(min=0, max=100)),
             vol.Required(P_NIGHT_POS, default=0): vol.All(int, vol.Range(min=0, max=100)),
             vol.Required(P_VPOS, default=self._base_opts.get(CONF_DEFAULT_VPOS, 30)): vol.All(int, vol.Range(min=0, max=80)),
             vol.Required(P_DOOR_SAFE, default=30): vol.All(int, vol.Range(min=0, max=80)),
-            vol.Optional(P_LUX, default=""): str,
-            vol.Optional(P_TEMP, default=""): str,
+            vol.Optional(P_LUX): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="illuminance")
+            ),
+            vol.Optional(P_TEMP): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+            ),
             vol.Optional(P_LUX_TH, default=20000): vol.Coerce(float),
             vol.Optional(P_TEMP_TH, default=26): vol.Coerce(float),
             vol.Optional(P_AZ_MIN, default=-360): vol.Coerce(float),
@@ -105,7 +116,9 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(P_COOLDOWN, default=self._base_opts.get(CONF_DEFAULT_COOLDOWN, 120)): vol.All(int, vol.Range(min=0, max=1800)),
             vol.Optional(P_ENABLED, default=True): bool,
             # Light automation
-            vol.Optional(P_LIGHT_ENTITY, default=""): str,  # light.xyz
+            vol.Optional(P_LIGHT_ENTITY): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="light")
+            ),
             vol.Optional(P_LIGHT_BRIGHTNESS, default=80): vol.All(int, vol.Range(min=0, max=100)),
             vol.Optional(P_LIGHT_ON_SHADE, default=True): bool,
             vol.Optional(P_LIGHT_ON_NIGHT, default=True): bool,
@@ -164,15 +177,25 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
 
         schema = vol.Schema({
             vol.Required(P_NAME, default=cur.get(P_NAME, "")): str,
-            vol.Required(P_COVER, default=cur.get(P_COVER, "")): str,
-            vol.Optional(P_WINDOW, default=cur.get(P_WINDOW) or ""): str,
-            vol.Optional(P_DOOR, default=cur.get(P_DOOR) or ""): str,
+            vol.Required(P_COVER, default=cur.get(P_COVER, "")): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="cover")
+            ),
+            vol.Optional(P_WINDOW, default=cur.get(P_WINDOW)): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
+            vol.Optional(P_DOOR, default=cur.get(P_DOOR)): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
             vol.Required(P_DAY_POS, default=cur.get(P_DAY_POS, 40)): vol.All(int, vol.Range(min=0, max=100)),
             vol.Required(P_NIGHT_POS, default=cur.get(P_NIGHT_POS, 0)): vol.All(int, vol.Range(min=0, max=100)),
             vol.Required(P_VPOS, default=cur.get(P_VPOS, self._base_opts.get(CONF_DEFAULT_VPOS, 30))): vol.All(int, vol.Range(min=0, max=80)),
             vol.Required(P_DOOR_SAFE, default=cur.get(P_DOOR_SAFE, 30)): vol.All(int, vol.Range(min=0, max=80)),
-            vol.Optional(P_LUX, default=cur.get(P_LUX) or ""): str,
-            vol.Optional(P_TEMP, default=cur.get(P_TEMP) or ""): str,
+            vol.Optional(P_LUX, default=cur.get(P_LUX)): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="illuminance")
+            ),
+            vol.Optional(P_TEMP, default=cur.get(P_TEMP)): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+            ),
             vol.Optional(P_LUX_TH, default=cur.get(P_LUX_TH, 20000)): vol.Coerce(float),
             vol.Optional(P_TEMP_TH, default=cur.get(P_TEMP_TH, 26)): vol.Coerce(float),
             vol.Optional(P_AZ_MIN, default=cur.get(P_AZ_MIN, -360)): vol.Coerce(float),
@@ -182,7 +205,9 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(P_COOLDOWN, default=cur.get(P_COOLDOWN, self._base_opts.get(CONF_DEFAULT_COOLDOWN, 120))): vol.All(int, vol.Range(min=0, max=1800)),
             vol.Optional(P_ENABLED, default=bool(cur.get(P_ENABLED, True))): bool,
             # Light automation
-            vol.Optional(P_LIGHT_ENTITY, default=cur.get(P_LIGHT_ENTITY) or ""): str,
+            vol.Optional(P_LIGHT_ENTITY, default=cur.get(P_LIGHT_ENTITY)): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="light")
+            ),
             vol.Optional(P_LIGHT_BRIGHTNESS, default=cur.get(P_LIGHT_BRIGHTNESS, 80)): vol.All(int, vol.Range(min=0, max=100)),
             vol.Optional(P_LIGHT_ON_SHADE, default=bool(cur.get(P_LIGHT_ON_SHADE, True))): bool,
             vol.Optional(P_LIGHT_ON_NIGHT, default=bool(cur.get(P_LIGHT_ON_NIGHT, True))): bool,
