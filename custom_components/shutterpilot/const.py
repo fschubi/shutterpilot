@@ -26,6 +26,12 @@ P_AZ_MAX = "azimuth_max"       # float deg
 P_COOLDOWN = "cooldown_sec"    # int sec
 P_ENABLED = "enabled"          # bool
 
+# Light automation
+P_LIGHT_ENTITY = "light_entity"           # light.xyz entity
+P_LIGHT_BRIGHTNESS = "light_brightness"   # 0-100%
+P_LIGHT_ON_SHADE = "light_on_shade"       # bool: Licht bei Beschattung an
+P_LIGHT_ON_NIGHT = "light_on_night"       # bool: Licht bei Nacht an
+
 # Runtime keys
 DATA = "data"
 RUNTIME_PROFILES = "runtime_profiles"

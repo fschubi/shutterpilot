@@ -20,6 +20,7 @@ from .const import (
     P_NAME, P_COVER, P_WINDOW, P_DOOR, P_DAY_POS, P_NIGHT_POS, P_VPOS,
     P_DOOR_SAFE, P_LUX, P_TEMP, P_LUX_TH, P_TEMP_TH, P_UP_TIME, P_DOWN_TIME,
     P_AZ_MIN, P_AZ_MAX, P_COOLDOWN, P_ENABLED,
+    P_LIGHT_ENTITY, P_LIGHT_BRIGHTNESS, P_LIGHT_ON_SHADE, P_LIGHT_ON_NIGHT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -62,6 +63,12 @@ class ProfileController:
         self.down_time = cfg.get(P_DOWN_TIME) or ""
         self.cooldown = _to_int(cfg.get(P_COOLDOWN, entry.options.get(CONF_DEFAULT_COOLDOWN, 120)), 120)
         self.enabled = bool(cfg.get(P_ENABLED, True))
+        
+        # Light automation
+        self.light_entity = cfg.get(P_LIGHT_ENTITY) or None
+        self.light_brightness = _to_int(cfg.get(P_LIGHT_BRIGHTNESS, 80), 80)
+        self.light_on_shade = bool(cfg.get(P_LIGHT_ON_SHADE, True))
+        self.light_on_night = bool(cfg.get(P_LIGHT_ON_NIGHT, True))
 
         self._cooldown_until: Optional[datetime] = None
         self._cooldown_timer: Optional[CALLBACK_TYPE] = None
@@ -209,6 +216,9 @@ class ProfileController:
             _LOGGER.debug("[%s] Night (elev=%.1f) → night_pos", self.name, elevation)
             self._update_status("active", "night_mode")
             await self._set_pos(self.night_pos)
+            # Light automation: Turn on light at night
+            if self.light_on_night:
+                await self._control_light(True, "night_mode")
         elif should_shade:
             reason = "sun_shade"
             if lux >= self.lux_th:
@@ -218,10 +228,15 @@ class ProfileController:
             _LOGGER.debug("[%s] Shade (elev=%.1f, az=%.1f, lux=%.0f, temp=%.1f) → day_pos", self.name, elevation, azimuth, lux, temp)
             self._update_status("active", reason)
             await self._set_pos(self.day_pos)
+            # Light automation: Turn on light when shading
+            if self.light_on_shade:
+                await self._control_light(True, "shading")
         else:
             _LOGGER.debug("[%s] Default → open", self.name)
             self._update_status("active", "default_open")
             await self.open_cover()
+            # Light automation: Turn off light when opening
+            await self._control_light(False, "cover_open")
 
     # ---------- internal listeners ----------
     async def _on_window_change(self, event):
@@ -424,3 +439,42 @@ class ProfileController:
             return (elevation, azimuth)
         except (ValueError, TypeError, AttributeError):
             return (0.0, 0.0)
+    
+    async def _control_light(self, turn_on: bool, reason: str):
+        """Control light based on cover action."""
+        if not self.light_entity:
+            return  # No light configured
+        
+        light_state = self.hass.states.get(self.light_entity)
+        if not light_state:
+            _LOGGER.debug("[%s] Light entity %s not found", self.name, self.light_entity)
+            return
+        
+        try:
+            if turn_on:
+                # Turn on light with brightness
+                brightness = int((self.light_brightness / 100) * 255)  # Convert 0-100% to 0-255
+                await self.hass.services.async_call(
+                    "light",
+                    "turn_on",
+                    {
+                        "entity_id": self.light_entity,
+                        "brightness": brightness,
+                    },
+                    blocking=False,
+                )
+                _LOGGER.info("[%s] Light %s turned ON (brightness=%d%%) - Reason: %s", 
+                           self.name, self.light_entity, self.light_brightness, reason)
+            else:
+                # Turn off light
+                await self.hass.services.async_call(
+                    "light",
+                    "turn_off",
+                    {"entity_id": self.light_entity},
+                    blocking=False,
+                )
+                _LOGGER.info("[%s] Light %s turned OFF - Reason: %s", 
+                           self.name, self.light_entity, reason)
+        except Exception as ex:
+            _LOGGER.warning("[%s] Error controlling light %s: %s", 
+                          self.name, self.light_entity, ex)

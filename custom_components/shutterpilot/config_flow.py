@@ -104,11 +104,16 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(P_DOWN_TIME, default=""): str,   # "HH:MM"
             vol.Optional(P_COOLDOWN, default=self._base_opts.get(CONF_DEFAULT_COOLDOWN, 120)): vol.All(int, vol.Range(min=0, max=1800)),
             vol.Optional(P_ENABLED, default=True): bool,
+            # Light automation
+            vol.Optional(P_LIGHT_ENTITY, default=""): str,  # light.xyz
+            vol.Optional(P_LIGHT_BRIGHTNESS, default=80): vol.All(int, vol.Range(min=0, max=100)),
+            vol.Optional(P_LIGHT_ON_SHADE, default=True): bool,
+            vol.Optional(P_LIGHT_ON_NIGHT, default=True): bool,
         })
         if user_input is not None:
             prof = dict(user_input)
             # normalize empties -> None
-            for k in (P_WINDOW, P_DOOR, P_LUX, P_TEMP):
+            for k in (P_WINDOW, P_DOOR, P_LUX, P_TEMP, P_LIGHT_ENTITY):
                 prof[k] = _norm_empty(prof.get(k))
             # validate and normalize time fields
             for k in (P_UP_TIME, P_DOWN_TIME):
@@ -176,11 +181,16 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(P_DOWN_TIME, default=cur.get(P_DOWN_TIME) or ""): str,
             vol.Optional(P_COOLDOWN, default=cur.get(P_COOLDOWN, self._base_opts.get(CONF_DEFAULT_COOLDOWN, 120))): vol.All(int, vol.Range(min=0, max=1800)),
             vol.Optional(P_ENABLED, default=bool(cur.get(P_ENABLED, True))): bool,
+            # Light automation
+            vol.Optional(P_LIGHT_ENTITY, default=cur.get(P_LIGHT_ENTITY) or ""): str,
+            vol.Optional(P_LIGHT_BRIGHTNESS, default=cur.get(P_LIGHT_BRIGHTNESS, 80)): vol.All(int, vol.Range(min=0, max=100)),
+            vol.Optional(P_LIGHT_ON_SHADE, default=bool(cur.get(P_LIGHT_ON_SHADE, True))): bool,
+            vol.Optional(P_LIGHT_ON_NIGHT, default=bool(cur.get(P_LIGHT_ON_NIGHT, True))): bool,
         })
         if user_input is not None:
             newp = dict(user_input)
             # normalize empties -> None
-            for k in (P_WINDOW, P_DOOR, P_LUX, P_TEMP):
+            for k in (P_WINDOW, P_DOOR, P_LUX, P_TEMP, P_LIGHT_ENTITY):
                 newp[k] = _norm_empty(newp.get(k))
             # validate and normalize time fields
             for k in (P_UP_TIME, P_DOWN_TIME):
