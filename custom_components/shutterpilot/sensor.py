@@ -14,6 +14,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     """Set up sensors for ShutterPilot."""
     entities = []
     
+    # Create config sensor (for management card)
+    entities.append(ShutterPilotConfigSensor(hass, entry))
+    
     # Create profile-specific sensors
     store = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if store:
@@ -346,4 +349,56 @@ class ShutterPilotSunElevationSensor(SensorEntity):
                 self._periodic_unsub()
         
         self.async_on_remove(_cleanup)
+
+
+class ShutterPilotConfigSensor(SensorEntity):
+    """Sensor that exposes config for the management card."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_entity_registry_enabled_default = False  # Hidden by default
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        self.hass = hass
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_config"
+        self._attr_name = "Configuration"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=f"ShutterPilot",
+            manufacturer="ShutterPilot",
+            model="Configuration",
+        )
+
+    @property
+    def native_value(self) -> str:
+        """Return the state."""
+        return "OK"
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Return config as attributes."""
+        return {
+            "entry_id": self._entry.entry_id,
+            "profiles": self._entry.options.get(CONF_PROFILES, []),
+            "areas": self._entry.options.get("areas", {}),
+            "global_settings": {
+                "default_vpos": self._entry.options.get("default_vpos", 30),
+                "default_cooldown": self._entry.options.get("default_cooldown", 120),
+                "summer_start": self._entry.options.get("summer_start", "05-01"),
+                "summer_end": self._entry.options.get("summer_end", "09-30"),
+                "sun_elevation_end": self._entry.options.get("sun_elevation_end", 3.0),
+                "sun_offset_up": self._entry.options.get("sun_offset_up", 0),
+                "sun_offset_down": self._entry.options.get("sun_offset_down", 0),
+            }
+        }
+
+    async def async_added_to_hass(self) -> None:
+        """Register update listener."""
+        self._entry.add_update_listener(self._update_listener)
+
+    async def _update_listener(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        """Handle options update."""
+        self.async_write_ha_state()
 

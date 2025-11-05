@@ -57,30 +57,44 @@ class ShutterPilotCard extends HTMLElement {
     if (!this._hass) return;
 
     try {
-      const entries = await this._hass.callWS({
-        type: 'config_entries/get',
-      });
+      // Find config sensor
+      const configSensor = Object.keys(this._hass.states).find(e => 
+        e.startsWith('sensor.shutterpilot_') && e.endsWith('_configuration')
+      );
 
-      const spEntry = entries.find(e => e.domain === 'shutterpilot');
-      
-      if (!spEntry) {
-        console.warn('ShutterPilot Integration nicht gefunden');
+      if (!configSensor) {
+        console.warn('ShutterPilot Config Sensor nicht gefunden');
         return;
       }
 
-      this._configEntry = spEntry;
+      const sensorState = this._hass.states[configSensor];
+      if (!sensorState || !sensorState.attributes) {
+        console.warn('Config Sensor hat keine Attributes');
+        return;
+      }
+
+      const attrs = sensorState.attributes;
       
-      const options = spEntry.options || {};
-      this._profiles = options.profiles || [];
-      this._areas = options.areas || this._getDefaultAreas();
-      this._globalSettings = {
-        default_vpos: options.default_vpos || 30,
-        default_cooldown: options.default_cooldown || 120,
-        summer_start: options.summer_start || '05-01',
-        summer_end: options.summer_end || '09-30',
-        sun_elevation_end: options.sun_elevation_end || 3.0,
-        sun_offset_up: options.sun_offset_up || 0,
-        sun_offset_down: options.sun_offset_down || 0,
+      // Store entry ID
+      this._configEntry = {
+        entry_id: attrs.entry_id,
+        options: {
+          profiles: attrs.profiles || [],
+          areas: attrs.areas || {},
+          ...attrs.global_settings
+        }
+      };
+      
+      this._profiles = attrs.profiles || [];
+      this._areas = attrs.areas || this._getDefaultAreas();
+      this._globalSettings = attrs.global_settings || {
+        default_vpos: 30,
+        default_cooldown: 120,
+        summer_start: '05-01',
+        summer_end: '09-30',
+        sun_elevation_end: 3.0,
+        sun_offset_up: 0,
+        sun_offset_down: 0,
       };
 
       this._enrichProfilesWithStatus();
@@ -2008,7 +2022,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c  SHUTTERPILOT-CARD  \n%c  Version 2.0.1 - Brightness + Fixed Save ',
+  '%c  SHUTTERPILOT-CARD  \n%c  Version 2.0.2 - Config Sensor + Save Fix ',
   'color: white; background: #1a73e8; font-weight: 700;',
   'color: #1a73e8; font-weight: 300;'
 );
