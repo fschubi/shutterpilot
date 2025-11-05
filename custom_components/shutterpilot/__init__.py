@@ -49,10 +49,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         for c in store[RUNTIME_PROFILES]:
             await c.evaluate_policy_and_apply()
 
+    async def _update_config(call: ServiceCall):
+        """Update config entry options (for card usage)."""
+        profiles = call.data.get("profiles", [])
+        areas = call.data.get("areas", {})
+        
+        # Merge with existing options
+        new_options = {**entry.options}
+        if profiles is not None:
+            new_options[CONF_PROFILES] = profiles
+        if areas:
+            new_options["areas"] = areas
+        
+        # Update config entry
+        hass.config_entries.async_update_entry(entry, options=new_options)
+        _LOGGER.info("Config updated via service, reloading...")
+
     hass.services.async_register(DOMAIN, "all_up", _all_up)
     hass.services.async_register(DOMAIN, "all_down", _all_down)
     hass.services.async_register(DOMAIN, "stop", _stop)
     hass.services.async_register(DOMAIN, "recalculate_now", _recalc)
+    hass.services.async_register(DOMAIN, "update_config", _update_config)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_entry))

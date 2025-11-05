@@ -14,3 +14,19 @@ recalculate_now:
   name: Sofort neu berechnen
   description: Sofortige Neuberechnung aller Profile (umgeht Cooldown).
   target: {}
+update_config:
+  name: Konfiguration aktualisieren
+  description: Aktualisiert Profile und Bereiche (wird von der Management Card verwendet).
+  fields:
+    profiles:
+      name: Profile
+      description: Liste aller Profile
+      required: false
+      selector:
+        object:
+    areas:
+      name: Bereiche
+      description: Bereichs-Konfiguration
+      required: false
+      selector:
+        object:

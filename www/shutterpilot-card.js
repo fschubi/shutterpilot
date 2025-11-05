@@ -1,7 +1,7 @@
 /**
  * ShutterPilot Management Card
  * Professional Enterprise-Level UI for ShutterPilot
- * Version: 1.0.0 - Production Ready
+ * Version: 2.0.1 - Dark Mode + Full In-Card Configuration
  */
 
 class ShutterPilotCard extends HTMLElement {
@@ -15,6 +15,7 @@ class ShutterPilotCard extends HTMLElement {
     this._areas = {};
     this._globalSettings = {};
     this._editingProfile = null;
+    this._editingArea = null;
     this._editDialogTab = 'basic';
     this._activeTab = 'profiles';
     this._selectedProfiles = new Set();
@@ -31,7 +32,6 @@ class ShutterPilotCard extends HTMLElement {
     const oldHass = this._hass;
     this._hass = hass;
     
-    // Initial load oder wenn Config Entry sich ändert
     if (!oldHass || this._needsUpdate(oldHass, hass)) {
       this._loadConfigEntry();
     }
@@ -40,13 +40,11 @@ class ShutterPilotCard extends HTMLElement {
   }
 
   _needsUpdate(oldHass, newHass) {
-    // Prüfe ob sich relevante States geändert haben
     const oldGlobal = oldHass?.states[this._config.entity];
     const newGlobal = newHass?.states[this._config.entity];
     
     if (oldGlobal?.state !== newGlobal?.state) return true;
     
-    // Prüfe Profil-Switches
     const oldSwitches = Object.keys(oldHass?.states || {}).filter(e => e.startsWith('switch.shutterpilot_'));
     const newSwitches = Object.keys(newHass?.states || {}).filter(e => e.startsWith('switch.shutterpilot_'));
     
@@ -59,12 +57,10 @@ class ShutterPilotCard extends HTMLElement {
     if (!this._hass) return;
 
     try {
-      // Hole die Config Entry via WebSocket
       const entries = await this._hass.callWS({
         type: 'config_entries/get',
       });
 
-      // Finde ShutterPilot Entry
       const spEntry = entries.find(e => e.domain === 'shutterpilot');
       
       if (!spEntry) {
@@ -74,7 +70,6 @@ class ShutterPilotCard extends HTMLElement {
 
       this._configEntry = spEntry;
       
-      // Extrahiere Profile und Areas aus den Options
       const options = spEntry.options || {};
       this._profiles = options.profiles || [];
       this._areas = options.areas || this._getDefaultAreas();
@@ -88,7 +83,6 @@ class ShutterPilotCard extends HTMLElement {
         sun_offset_down: options.sun_offset_down || 0,
       };
 
-      // Ergänze Profile mit Live-Status aus Sensoren
       this._enrichProfilesWithStatus();
 
     } catch (err) {
@@ -140,7 +134,6 @@ class ShutterPilotCard extends HTMLElement {
     this._profiles = this._profiles.map(profile => {
       const sanitizedName = profile.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
       
-      // Hole Status-Sensor
       const statusSensor = this._hass.states[`sensor.shutterpilot_${sanitizedName}_status`];
       const enabledSwitch = this._hass.states[`switch.shutterpilot_${sanitizedName}_automation`];
       
@@ -169,7 +162,8 @@ class ShutterPilotCard extends HTMLElement {
         ${this._renderHeader()}
         ${this._renderTabs()}
         <div class="card-content">${tabContent}</div>
-        ${this._editingProfile !== null ? this._renderEditDialog() : ''}
+        ${this._editingProfile !== null ? this._renderProfileEditDialog() : ''}
+        ${this._editingArea !== null ? this._renderAreaEditDialog() : ''}
       </div>
     `;
 
@@ -185,11 +179,8 @@ class ShutterPilotCard extends HTMLElement {
           <span class="subtitle">Enterprise Rollladensteuerung</span>
         </div>
         <div class="header-right">
-          <button class="icon-button" onclick="window.spCard._refresh()">
+          <button class="icon-button" data-action="refresh" title="Aktualisieren">
             <ha-icon icon="mdi:refresh"></ha-icon>
-          </button>
-          <button class="icon-button" onclick="window.spCard._openIntegrationConfig()">
-            <ha-icon icon="mdi:cog"></ha-icon>
           </button>
         </div>
       </div>
@@ -200,17 +191,17 @@ class ShutterPilotCard extends HTMLElement {
     return `
       <div class="tabs">
         <button class="tab ${this._activeTab === 'profiles' ? 'active' : ''}" 
-                onclick="window.spCard._setTab('profiles')">
+                data-tab="profiles">
           <ha-icon icon="mdi:view-list"></ha-icon>
           Profile
         </button>
         <button class="tab ${this._activeTab === 'areas' ? 'active' : ''}" 
-                onclick="window.spCard._setTab('areas')">
+                data-tab="areas">
           <ha-icon icon="mdi:home-group"></ha-icon>
           Bereiche
         </button>
         <button class="tab ${this._activeTab === 'global' ? 'active' : ''}" 
-                onclick="window.spCard._setTab('global')">
+                data-tab="global">
           <ha-icon icon="mdi:cog-outline"></ha-icon>
           Global
         </button>
@@ -224,10 +215,10 @@ class ShutterPilotCard extends HTMLElement {
         <div class="empty-state">
           <ha-icon icon="mdi:window-shutter-open"></ha-icon>
           <h3>Keine Profile vorhanden</h3>
-          <p>Erstelle dein erstes Profil über die Integration-Einstellungen</p>
-          <button class="btn btn-primary" onclick="window.spCard._openIntegrationConfig()">
-            <ha-icon icon="mdi:cog"></ha-icon>
-            Zu den Einstellungen
+          <p>Erstelle dein erstes Profil direkt hier in der Card</p>
+          <button class="btn btn-primary" data-action="add-profile">
+            <ha-icon icon="mdi:plus"></ha-icon>
+            Neues Profil erstellen
           </button>
         </div>
       `;
@@ -235,20 +226,20 @@ class ShutterPilotCard extends HTMLElement {
 
     return `
       <div class="toolbar">
-        <button class="btn btn-primary" onclick="window.spCard._openIntegrationConfig()">
+        <button class="btn btn-primary" data-action="add-profile">
           <ha-icon icon="mdi:plus"></ha-icon>
           Neues Profil
         </button>
         <div class="toolbar-actions">
-          <button class="btn btn-secondary" onclick="window.spCard._callService('all_up')">
+          <button class="btn btn-secondary" data-service="all_up">
             <ha-icon icon="mdi:arrow-up"></ha-icon>
             Alle hoch
           </button>
-          <button class="btn btn-secondary" onclick="window.spCard._callService('all_down')">
+          <button class="btn btn-secondary" data-service="all_down">
             <ha-icon icon="mdi:arrow-down"></ha-icon>
             Alle runter
           </button>
-          <button class="btn btn-secondary" onclick="window.spCard._callService('stop')">
+          <button class="btn btn-secondary" data-service="stop">
             <ha-icon icon="mdi:stop"></ha-icon>
             Stopp
           </button>
@@ -257,9 +248,6 @@ class ShutterPilotCard extends HTMLElement {
 
       <div class="profile-table">
         <div class="table-header">
-          <div class="th th-checkbox">
-            <input type="checkbox" onchange="window.spCard._toggleAllProfiles(this.checked)">
-          </div>
           <div class="th th-status">Status</div>
           <div class="th th-name">Name</div>
           <div class="th th-cover">Rollladen</div>
@@ -280,11 +268,6 @@ class ShutterPilotCard extends HTMLElement {
     
     return `
       <div class="table-row ${profile.enabled ? '' : 'disabled'}">
-        <div class="td td-checkbox">
-          <input type="checkbox" 
-                 ${this._selectedProfiles.has(index) ? 'checked' : ''}
-                 onchange="window.spCard._toggleProfile(${index}, this.checked)">
-        </div>
         <div class="td td-status">
           <span class="status-badge status-${statusClass}">
             ${statusText}
@@ -311,17 +294,17 @@ class ShutterPilotCard extends HTMLElement {
           </div>
         </div>
         <div class="td td-actions">
-          <button class="action-btn" onclick="window.spCard._showProfileInfo(${index})" title="Info">
-            <ha-icon icon="mdi:information"></ha-icon>
-          </button>
-          <button class="action-btn" onclick="window.spCard._toggleProfileEnabled(${index})" 
+          <button class="action-btn" data-action="toggle" data-index="${index}" 
                   title="${profile.enabled ? 'Deaktivieren' : 'Aktivieren'}">
             <ha-icon icon="${profile.enabled ? 'mdi:pause' : 'mdi:play'}"></ha-icon>
           </button>
-          <button class="action-btn" onclick="window.spCard._openIntegrationConfig()" title="Bearbeiten">
+          <button class="action-btn" data-action="edit" data-index="${index}" title="Bearbeiten">
             <ha-icon icon="mdi:pencil"></ha-icon>
           </button>
-          <button class="action-btn action-delete" onclick="window.spCard._deleteProfile(${index})" title="Löschen">
+          <button class="action-btn" data-action="copy" data-index="${index}" title="Duplizieren">
+            <ha-icon icon="mdi:content-copy"></ha-icon>
+          </button>
+          <button class="action-btn action-delete" data-action="delete" data-index="${index}" title="Löschen">
             <ha-icon icon="mdi:delete"></ha-icon>
           </button>
         </div>
@@ -332,16 +315,6 @@ class ShutterPilotCard extends HTMLElement {
   _renderAreasTab() {
     const areas = Object.entries(this._areas);
     
-    if (areas.length === 0) {
-      return `
-        <div class="empty-state">
-          <ha-icon icon="mdi:home-group"></ha-icon>
-          <h3>Keine Bereiche konfiguriert</h3>
-          <p>Konfiguriere Bereiche über die Integration-Einstellungen</p>
-        </div>
-      `;
-    }
-
     return `
       <div class="areas-grid">
         ${areas.map(([key, area]) => this._renderAreaCard(key, area)).join('')}
@@ -357,7 +330,7 @@ class ShutterPilotCard extends HTMLElement {
       <div class="area-card">
         <div class="area-header">
           <h3>${area.name}</h3>
-          <button class="btn-icon" onclick="window.spCard._openIntegrationConfig()" title="Bearbeiten">
+          <button class="btn-icon" data-action="edit-area" data-area="${key}" title="Bearbeiten">
             <ha-icon icon="mdi:pencil"></ha-icon>
           </button>
         </div>
@@ -383,18 +356,6 @@ class ShutterPilotCard extends HTMLElement {
             <span class="value">${area.down_time_weekend || '-'}</span>
           </div>
           <div class="info-row">
-            <span class="label">Früheste Hochfahrzeit:</span>
-            <span class="value">${area.up_earliest || '-'}</span>
-          </div>
-          <div class="info-row">
-            <span class="label">Späteste Hochfahrzeit:</span>
-            <span class="value">${area.up_latest || '-'}</span>
-          </div>
-          <div class="info-row">
-            <span class="label">Verzögerung:</span>
-            <span class="value">${area.stagger_delay || 0}s</span>
-          </div>
-          <div class="info-row">
             <span class="label">Zugeordnete Profile:</span>
             <span class="value badge">${profileCount}</span>
           </div>
@@ -413,8 +374,7 @@ class ShutterPilotCard extends HTMLElement {
           <div class="setting-header">
             <h3>Globale Automatik</h3>
             <label class="switch">
-              <input type="checkbox" ${isOn ? 'checked' : ''} 
-                     onchange="window.spCard._toggleGlobalAuto(this.checked)">
+              <input type="checkbox" ${isOn ? 'checked' : ''} data-action="toggle-global">
               <span class="slider"></span>
             </label>
           </div>
@@ -426,7 +386,7 @@ class ShutterPilotCard extends HTMLElement {
         <div class="setting-card">
           <h3>Services</h3>
           <div class="service-buttons">
-            <button class="btn btn-block btn-secondary" onclick="window.spCard._callService('recalculate_now')">
+            <button class="btn btn-block btn-secondary" data-service="recalculate_now">
               <ha-icon icon="mdi:refresh"></ha-icon>
               Sofort neu berechnen
             </button>
@@ -448,38 +408,6 @@ class ShutterPilotCard extends HTMLElement {
         </div>
 
         <div class="setting-card">
-          <h3>Sonnen-Einstellungen</h3>
-          <div class="info-grid">
-            <div class="info-item">
-              <span class="label">Sonnenhöhe Ende:</span>
-              <span class="value">${this._globalSettings.sun_elevation_end}°</span>
-            </div>
-            <div class="info-item">
-              <span class="label">Offset Hochfahren:</span>
-              <span class="value">${this._globalSettings.sun_offset_up} Min</span>
-            </div>
-            <div class="info-item">
-              <span class="label">Offset Runterfahren:</span>
-              <span class="value">${this._globalSettings.sun_offset_down} Min</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="setting-card">
-          <h3>Standard-Werte</h3>
-          <div class="info-grid">
-            <div class="info-item">
-              <span class="label">Lüftungsposition:</span>
-              <span class="value">${this._globalSettings.default_vpos}%</span>
-            </div>
-            <div class="info-item">
-              <span class="label">Cooldown:</span>
-              <span class="value">${this._globalSettings.default_cooldown}s</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="setting-card">
           <h3>Statistik</h3>
           <div class="info-grid">
             <div class="info-item">
@@ -496,26 +424,518 @@ class ShutterPilotCard extends HTMLElement {
             </div>
           </div>
         </div>
+      </div>
+    `;
+  }
 
-        <div class="setting-card">
-          <h3>Einstellungen</h3>
-          <button class="btn btn-block btn-primary" onclick="window.spCard._openIntegrationConfig()">
-            <ha-icon icon="mdi:cog"></ha-icon>
-            Integration konfigurieren
-          </button>
+  _renderProfileEditDialog() {
+    const profile = this._editingProfile?.index >= 0 ? 
+      this._profiles[this._editingProfile.index] : 
+      this._getEmptyProfile();
+    
+    const isNew = this._editingProfile?.index === -1;
+    const title = isNew ? 'Neues Profil erstellen' : `Profil bearbeiten: ${profile.name}`;
+
+    return `
+      <div class="dialog-overlay">
+        <div class="dialog">
+          <div class="dialog-header">
+            <h2>${title}</h2>
+            <button class="btn-icon-dialog" data-action="close-dialog">
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+
+          <div class="dialog-tabs">
+            <button class="dialog-tab ${this._editDialogTab === 'basic' ? 'active' : ''}" data-dialog-tab="basic">Basis</button>
+            <button class="dialog-tab ${this._editDialogTab === 'sensors' ? 'active' : ''}" data-dialog-tab="sensors">Sensoren</button>
+            <button class="dialog-tab ${this._editDialogTab === 'sun' ? 'active' : ''}" data-dialog-tab="sun">Sonnenschutz</button>
+            <button class="dialog-tab ${this._editDialogTab === 'advanced' ? 'active' : ''}" data-dialog-tab="advanced">Erweitert</button>
+          </div>
+
+          <div class="dialog-content">
+            <form id="profile-form">
+              ${this._renderProfileEditForm(profile)}
+            </form>
+          </div>
+
+          <div class="dialog-footer">
+            <button class="btn btn-secondary" data-action="close-dialog">
+              Abbrechen
+            </button>
+            <button class="btn btn-primary" data-action="save-profile">
+              <ha-icon icon="mdi:content-save"></ha-icon>
+              Speichern
+            </button>
+          </div>
         </div>
       </div>
     `;
   }
 
-  _renderEditDialog() {
-    // Für zukünftige Implementierung - derzeit öffnen wir immer die Integration-Config
-    return '';
+  _renderProfileEditForm(profile) {
+    if (this._editDialogTab === 'basic') {
+      return this._renderProfileBasicForm(profile);
+    } else if (this._editDialogTab === 'sensors') {
+      return this._renderProfileSensorsForm(profile);
+    } else if (this._editDialogTab === 'sun') {
+      return this._renderProfileSunForm(profile);
+    } else {
+      return this._renderProfileAdvancedForm(profile);
+    }
   }
 
-  // Event Handlers
+  _renderProfileBasicForm(profile) {
+    const coverEntities = Object.keys(this._hass.states).filter(e => e.startsWith('cover.'));
+    const areas = Object.entries(this._areas);
+
+    return `
+      <div class="form-group">
+        <label>Profilname *</label>
+        <input type="text" name="name" value="${profile.name || ''}" required class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label>Cover Entity *</label>
+        <select name="cover" required class="form-input">
+          <option value="">-- Bitte wählen --</option>
+          ${coverEntities.map(e => `
+            <option value="${e}" ${profile.cover === e ? 'selected' : ''}>${e}</option>
+          `).join('')}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Bereich zuordnen</label>
+        <select name="area" class="form-input">
+          <option value="">Keinem Bereich</option>
+          ${areas.map(([key, area]) => `
+            <option value="${key}" ${profile.area === key ? 'selected' : ''}>${area.name}</option>
+          `).join('')}
+        </select>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tagesposition (%)</label>
+          <input type="number" name="day_pos" value="${profile.day_pos || 40}" min="0" max="100" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Nachtposition (%)</label>
+          <input type="number" name="night_pos" value="${profile.night_pos || 0}" min="0" max="100" class="form-input">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Lüftungsposition (%)</label>
+          <input type="number" name="vent_pos" value="${profile.vent_pos || 30}" min="0" max="80" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Tür-Position (%)</label>
+          <input type="number" name="door_safe" value="${profile.door_safe || 30}" min="0" max="80" class="form-input">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Cooldown (Sekunden)</label>
+        <input type="number" name="cooldown" value="${profile.cooldown || 120}" min="0" max="1800" class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" name="enabled" ${profile.enabled !== false ? 'checked' : ''}>
+          <span>Profil aktiviert</span>
+        </label>
+      </div>
+    `;
+  }
+
+  _renderProfileSensorsForm(profile) {
+    const binarySensors = Object.keys(this._hass.states).filter(e => e.startsWith('binary_sensor.'));
+    const luxSensors = Object.keys(this._hass.states).filter(e => 
+      e.startsWith('sensor.') && (e.includes('lux') || e.includes('bright') || e.includes('illuminance'))
+    );
+    const tempSensors = Object.keys(this._hass.states).filter(e => 
+      e.startsWith('sensor.') && (e.includes('temp') || e.includes('temperature'))
+    );
+
+    return `
+      <div class="form-group highlight-sensor">
+        <label>
+          <ha-icon icon="mdi:brightness-5"></ha-icon>
+          Helligkeitssensor (Lux) - Wichtig für Beschattung!
+        </label>
+        <select name="lux_sensor" class="form-input">
+          <option value="">Kein Sensor</option>
+          ${luxSensors.map(e => `
+            <option value="${e}" ${profile.lux_sensor === e ? 'selected' : ''}>${e}</option>
+          `).join('')}
+        </select>
+        <small class="form-hint">
+          ${profile.lux_sensor ? '✅ Sensor konfiguriert' : '⚠️ Empfohlen für automatische Beschattung'}
+        </small>
+      </div>
+
+      <div class="form-group">
+        <label>
+          <ha-icon icon="mdi:window-open"></ha-icon>
+          Fenster-Sensor
+        </label>
+        <select name="window_sensor" class="form-input">
+          <option value="">Kein Sensor</option>
+          ${binarySensors.map(e => `
+            <option value="${e}" ${profile.window_sensor === e ? 'selected' : ''}>${e}</option>
+          `).join('')}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>
+          <ha-icon icon="mdi:door-open"></ha-icon>
+          Tür-Sensor
+        </label>
+        <select name="door_sensor" class="form-input">
+          <option value="">Kein Sensor</option>
+          ${binarySensors.map(e => `
+            <option value="${e}" ${profile.door_sensor === e ? 'selected' : ''}>${e}</option>
+          `).join('')}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>
+          <ha-icon icon="mdi:thermometer"></ha-icon>
+          Temperatur-Sensor
+        </label>
+        <select name="temp_sensor" class="form-input">
+          <option value="">Kein Sensor</option>
+          ${tempSensors.map(e => `
+            <option value="${e}" ${profile.temp_sensor === e ? 'selected' : ''}>${e}</option>
+          `).join('')}
+        </select>
+      </div>
+    `;
+  }
+
+  _renderProfileSunForm(profile) {
+    return `
+      <div class="form-row">
+        <div class="form-group">
+          <label>Helligkeits-Schwellwert (lx)</label>
+          <input type="number" name="lux_th" value="${profile.lux_th || 20000}" min="0" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Helligkeits-Hysterese (%)</label>
+          <input type="number" name="lux_hysteresis" value="${profile.lux_hysteresis || 20}" min="0" max="100" class="form-input">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Temperatur-Schwellwert (°C)</label>
+          <input type="number" name="temp_th" value="${profile.temp_th || 26}" min="0" step="0.1" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Temperatur-Hysterese (%)</label>
+          <input type="number" name="temp_hysteresis" value="${profile.temp_hysteresis || 10}" min="0" max="100" class="form-input">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Azimut Min (°)</label>
+          <input type="number" name="az_min" value="${profile.az_min || -360}" min="-360" max="360" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Azimut Max (°)</label>
+          <input type="number" name="az_max" value="${profile.az_max || 360}" min="-360" max="360" class="form-input">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Beschattungsposition (%)</label>
+        <input type="number" name="shade_pos" value="${profile.shade_pos || 20}" min="0" max="100" class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" name="keep_sunprotect" ${profile.keep_sunprotect ? 'checked' : ''}>
+          <span>Im Sonnenschutz halten</span>
+        </label>
+      </div>
+    `;
+  }
+
+  _renderProfileAdvancedForm(profile) {
+    return `
+      <div class="form-row">
+        <div class="form-group">
+          <label>Fenster öffnen Verzögerung (s)</label>
+          <input type="number" name="window_open_delay" value="${profile.window_open_delay || 0}" min="0" max="300" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Fenster schließen Verzögerung (s)</label>
+          <input type="number" name="window_close_delay" value="${profile.window_close_delay || 0}" min="0" max="300" class="form-input">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" name="heat_protection" ${profile.heat_protection ? 'checked' : ''}>
+          <span>Wärmeschutz aktivieren</span>
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label>Wärmeschutz-Temperatur (°C)</label>
+        <input type="number" name="heat_protection_temp" value="${profile.heat_protection_temp || 30}" min="0" step="0.1" class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" name="no_close_summer" ${profile.no_close_summer ? 'checked' : ''}>
+          <span>Im Sommer nicht schließen</span>
+        </label>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Zwischenposition (%)</label>
+          <input type="number" name="intermediate_pos" value="${profile.intermediate_pos || 0}" min="0" max="100" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Zwischenzeit (HH:MM)</label>
+          <input type="time" name="intermediate_time" value="${profile.intermediate_time || ''}" class="form-input">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Helligkeits-Ende Verzögerung (min)</label>
+        <input type="number" name="brightness_end_delay" value="${profile.brightness_end_delay || 0}" min="0" max="60" class="form-input">
+      </div>
+    `;
+  }
+
+  _renderAreaEditDialog() {
+    const areaKey = this._editingArea;
+    const area = this._areas[areaKey] || {};
+    const areaNames = {
+      living: 'Wohnbereich',
+      sleeping: 'Schlafbereich',
+      children: 'Kinderbereich'
+    };
+
+    return `
+      <div class="dialog-overlay">
+        <div class="dialog">
+          <div class="dialog-header">
+            <h2>Bereich bearbeiten: ${area.name || areaNames[areaKey]}</h2>
+            <button class="btn-icon-dialog" data-action="close-dialog">
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+
+          <div class="dialog-content">
+            <form id="area-form">
+              <div class="form-group">
+                <label>Name</label>
+                <input type="text" name="name" value="${area.name || ''}" required class="form-input">
+              </div>
+
+              <div class="form-group">
+                <label>Modus</label>
+                <select name="mode" class="form-input">
+                  <option value="time_only" ${area.mode === 'time_only' ? 'selected' : ''}>Nur Zeit</option>
+                  <option value="sun" ${area.mode === 'sun' ? 'selected' : ''}>Sonnenstand</option>
+                  <option value="golden_hour" ${area.mode === 'golden_hour' ? 'selected' : ''}>Golden Hour</option>
+                  <option value="brightness" ${area.mode === 'brightness' ? 'selected' : ''}>Helligkeitssensor</option>
+                </select>
+              </div>
+
+              <h4 class="form-section-title">Wochentag</h4>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Hochfahrzeit</label>
+                  <input type="time" name="up_time_week" value="${area.up_time_week || ''}" class="form-input">
+                </div>
+                <div class="form-group">
+                  <label>Runterfahrzeit</label>
+                  <input type="time" name="down_time_week" value="${area.down_time_week || ''}" class="form-input">
+                </div>
+              </div>
+
+              <h4 class="form-section-title">Wochenende</h4>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Hochfahrzeit</label>
+                  <input type="time" name="up_time_weekend" value="${area.up_time_weekend || ''}" class="form-input">
+                </div>
+                <div class="form-group">
+                  <label>Runterfahrzeit</label>
+                  <input type="time" name="down_time_weekend" value="${area.down_time_weekend || ''}" class="form-input">
+                </div>
+              </div>
+
+              <h4 class="form-section-title">Grenzen</h4>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Früheste Hochfahrzeit</label>
+                  <input type="time" name="up_earliest" value="${area.up_earliest || ''}" class="form-input">
+                </div>
+                <div class="form-group">
+                  <label>Späteste Hochfahrzeit</label>
+                  <input type="time" name="up_latest" value="${area.up_latest || ''}" class="form-input">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Verzögerung (Sekunden)</label>
+                <input type="number" name="stagger_delay" value="${area.stagger_delay || 0}" min="0" max="300" class="form-input">
+              </div>
+            </form>
+          </div>
+
+          <div class="dialog-footer">
+            <button class="btn btn-secondary" data-action="close-dialog">
+              Abbrechen
+            </button>
+            <button class="btn btn-primary" data-action="save-area">
+              <ha-icon icon="mdi:content-save"></ha-icon>
+              Speichern
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _getEmptyProfile() {
+    return {
+      name: '',
+      cover: '',
+      area: '',
+      day_pos: 40,
+      night_pos: 0,
+      vent_pos: 30,
+      door_safe: 30,
+      cooldown: 120,
+      enabled: true,
+      window_sensor: '',
+      door_sensor: '',
+      lux_sensor: '',
+      temp_sensor: '',
+      lux_th: 20000,
+      lux_hysteresis: 20,
+      temp_th: 26,
+      temp_hysteresis: 10,
+      az_min: -360,
+      az_max: 360,
+      shade_pos: 20,
+      window_open_delay: 0,
+      window_close_delay: 0,
+      heat_protection: false,
+      heat_protection_temp: 30,
+      no_close_summer: false,
+      intermediate_pos: 0,
+      intermediate_time: '',
+      brightness_end_delay: 0,
+      keep_sunprotect: false,
+    };
+  }
+
+  // Event Listeners
   _attachEventListeners() {
-    window.spCard = this;
+    const root = this.shadowRoot;
+
+    // Header Buttons
+    root.querySelectorAll('[data-action="refresh"]').forEach(btn => {
+      btn.addEventListener('click', () => this._refresh());
+    });
+
+    // Tab Navigation
+    root.querySelectorAll('[data-tab]').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        const tabName = e.currentTarget.getAttribute('data-tab');
+        this._setTab(tabName);
+      });
+    });
+
+    // Service Buttons
+    root.querySelectorAll('[data-service]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const service = e.currentTarget.getAttribute('data-service');
+        this._callService(service);
+      });
+    });
+
+    // Profile Actions
+    root.querySelectorAll('[data-action="add-profile"]').forEach(btn => {
+      btn.addEventListener('click', () => this._addProfile());
+    });
+
+    root.querySelectorAll('[data-action="toggle"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt(e.currentTarget.getAttribute('data-index'));
+        this._toggleProfileEnabled(index);
+      });
+    });
+
+    root.querySelectorAll('[data-action="edit"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt(e.currentTarget.getAttribute('data-index'));
+        this._editProfile(index);
+      });
+    });
+
+    root.querySelectorAll('[data-action="copy"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt(e.currentTarget.getAttribute('data-index'));
+        this._copyProfile(index);
+      });
+    });
+
+    root.querySelectorAll('[data-action="delete"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt(e.currentTarget.getAttribute('data-index'));
+        this._deleteProfile(index);
+      });
+    });
+
+    // Area Actions
+    root.querySelectorAll('[data-action="edit-area"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const area = e.currentTarget.getAttribute('data-area');
+        this._editArea(area);
+      });
+    });
+
+    // Global Auto Toggle
+    root.querySelectorAll('[data-action="toggle-global"]').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        this._toggleGlobalAuto(e.target.checked);
+      });
+    });
+
+    // Dialog Actions
+    root.querySelectorAll('[data-action="close-dialog"]').forEach(btn => {
+      btn.addEventListener('click', () => this._closeDialog());
+    });
+
+    root.querySelectorAll('[data-dialog-tab]').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        this._editDialogTab = e.currentTarget.getAttribute('data-dialog-tab');
+        this.render();
+      });
+    });
+
+    root.querySelectorAll('[data-action="save-profile"]').forEach(btn => {
+      btn.addEventListener('click', () => this._saveProfile());
+    });
+
+    root.querySelectorAll('[data-action="save-area"]').forEach(btn => {
+      btn.addEventListener('click', () => this._saveArea());
+    });
   }
 
   _setTab(tab) {
@@ -529,44 +949,160 @@ class ShutterPilotCard extends HTMLElement {
     this._showToast('Daten aktualisiert');
   }
 
-  _openIntegrationConfig() {
+  _addProfile() {
+    this._editingProfile = { index: -1 };
+    this._editDialogTab = 'basic';
+    this.render();
+  }
+
+  _editProfile(index) {
+    this._editingProfile = { index };
+    this._editDialogTab = 'basic';
+    this.render();
+  }
+
+  async _copyProfile(index) {
+    const profile = { ...this._profiles[index] };
+    profile.name = `${profile.name} (Kopie)`;
+    delete profile.status;
+    delete profile.enabled;
+    delete profile._entities;
+
+    this._profiles.push(profile);
+    await this._saveConfig();
+    this._showToast('Profil dupliziert');
+  }
+
+  async _deleteProfile(index) {
+    const profile = this._profiles[index];
+    if (!confirm(`Profil "${profile.name}" wirklich löschen?`)) return;
+
+    this._profiles.splice(index, 1);
+    await this._saveConfig();
+    this._showToast('Profil gelöscht');
+  }
+
+  _editArea(areaKey) {
+    this._editingArea = areaKey;
+    this.render();
+  }
+
+  _closeDialog() {
+    this._editingProfile = null;
+    this._editingArea = null;
+    this._editDialogTab = 'basic';
+    this.render();
+  }
+
+  async _saveProfile() {
+    const form = this.shadowRoot.querySelector('#profile-form');
+    if (!form) return;
+
+    const formData = new FormData(form);
+    const profile = {};
+
+    // Text inputs
+    ['name', 'cover', 'area', 'window_sensor', 'door_sensor', 'lux_sensor', 'temp_sensor', 'intermediate_time'].forEach(field => {
+      const value = formData.get(field);
+      profile[field] = value === '' ? null : value;
+    });
+
+    // Number inputs
+    ['day_pos', 'night_pos', 'vent_pos', 'door_safe', 'cooldown', 'lux_th', 'lux_hysteresis', 
+     'temp_th', 'temp_hysteresis', 'az_min', 'az_max', 'shade_pos', 'window_open_delay', 
+     'window_close_delay', 'heat_protection_temp', 'intermediate_pos', 'brightness_end_delay'].forEach(field => {
+      const value = formData.get(field);
+      profile[field] = value ? parseFloat(value) : 0;
+    });
+
+    // Checkboxes
+    ['enabled', 'heat_protection', 'no_close_summer', 'keep_sunprotect'].forEach(field => {
+      profile[field] = formData.get(field) === 'on';
+    });
+
+    // Validation
+    if (!profile.name || !profile.cover) {
+      alert('Bitte fülle mindestens Name und Cover Entity aus!');
+      return;
+    }
+
+    // Save
+    const index = this._editingProfile.index;
+    if (index === -1) {
+      this._profiles.push(profile);
+    } else {
+      // Preserve runtime data
+      const oldProfile = this._profiles[index];
+      this._profiles[index] = { ...profile, status: oldProfile.status, _entities: oldProfile._entities };
+    }
+
+    await this._saveConfig();
+    this._closeDialog();
+    this._showToast(index === -1 ? 'Profil erstellt' : 'Profil gespeichert');
+  }
+
+  async _saveArea() {
+    const form = this.shadowRoot.querySelector('#area-form');
+    if (!form) return;
+
+    const formData = new FormData(form);
+    const areaKey = this._editingArea;
+    const area = {};
+
+    ['name', 'mode', 'up_time_week', 'down_time_week', 'up_time_weekend', 
+     'down_time_weekend', 'up_earliest', 'up_latest'].forEach(field => {
+      area[field] = formData.get(field) || '';
+    });
+
+    area.stagger_delay = parseInt(formData.get('stagger_delay')) || 0;
+
+    this._areas[areaKey] = area;
+    await this._saveConfig();
+    this._closeDialog();
+    this._showToast('Bereich gespeichert');
+  }
+
+  async _saveConfig() {
     if (!this._configEntry) {
       this._showToast('Config Entry nicht gefunden', 'error');
       return;
     }
 
-    const event = new Event('config-entry-open', {
-      bubbles: true,
-      composed: true,
-    });
-    event.detail = { entry_id: this._configEntry.entry_id };
-    this.dispatchEvent(event);
+    try {
+      // Bereinige Profile (entferne Runtime-Daten)
+      const cleanProfiles = this._profiles.map(p => {
+        const clean = { ...p };
+        delete clean.status;
+        delete clean._entities;
+        return clean;
+      });
 
-    // Alternative: Öffne Integrations-Seite
-    window.location.href = `/config/integrations/integration/shutterpilot`;
-  }
+      // Nutze den update_config Service
+      await this._hass.callService('shutterpilot', 'update_config', {
+        profiles: cleanProfiles,
+        areas: this._areas,
+      });
 
-  _toggleAllProfiles(checked) {
-    if (checked) {
-      this._profiles.forEach((_, idx) => this._selectedProfiles.add(idx));
-    } else {
-      this._selectedProfiles.clear();
+      this._showToast('Konfiguration gespeichert', 'success');
+
+      // Warte kurz auf Reload, dann neu laden
+      setTimeout(async () => {
+        await this._loadConfigEntry();
+        this.render();
+      }, 1000);
+
+    } catch (err) {
+      console.error('Fehler beim Speichern:', err);
+      this._showToast(`Fehler beim Speichern: ${err.message}`, 'error');
     }
-    this.render();
-  }
-
-  _toggleProfile(index, checked) {
-    if (checked) {
-      this._selectedProfiles.add(index);
-    } else {
-      this._selectedProfiles.delete(index);
-    }
-    this.render();
   }
 
   async _toggleProfileEnabled(index) {
     const profile = this._profiles[index];
-    if (!profile || !profile._entities?.switch) return;
+    if (!profile || !profile._entities?.switch) {
+      this._showToast('Switch-Entity nicht gefunden', 'error');
+      return;
+    }
 
     const service = profile.enabled ? 'turn_off' : 'turn_on';
     
@@ -576,44 +1112,10 @@ class ShutterPilotCard extends HTMLElement {
       });
       this._showToast(`Profil ${profile.enabled ? 'deaktiviert' : 'aktiviert'}`);
       
-      // Warte kurz und aktualisiere
       setTimeout(() => this._refresh(), 500);
     } catch (err) {
       this._showToast(`Fehler: ${err.message}`, 'error');
     }
-  }
-
-  _showProfileInfo(index) {
-    const profile = this._profiles[index];
-    if (!profile) return;
-
-    const info = `
-      <strong>${profile.name}</strong><br><br>
-      <strong>Cover:</strong> ${profile.cover}<br>
-      <strong>Bereich:</strong> ${profile.area ? this._areas[profile.area]?.name : 'Keiner'}<br>
-      <strong>Status:</strong> ${this._getStatusText(profile.status)}<br>
-      <strong>Enabled:</strong> ${profile.enabled ? 'Ja' : 'Nein'}<br><br>
-      
-      <strong>Sensoren:</strong><br>
-      ${profile.window_sensor ? `Fenster: ${profile.window_sensor}<br>` : ''}
-      ${profile.door_sensor ? `Tür: ${profile.door_sensor}<br>` : ''}
-      ${profile.lux_sensor ? `Helligkeit: ${profile.lux_sensor}<br>` : ''}
-      ${profile.temp_sensor ? `Temperatur: ${profile.temp_sensor}<br>` : ''}
-      ${!profile.window_sensor && !profile.door_sensor && !profile.lux_sensor && !profile.temp_sensor ? 'Keine Sensoren konfiguriert' : ''}
-    `;
-
-    this._showDialog('Profil-Information', info);
-  }
-
-  async _deleteProfile(index) {
-    const profile = this._profiles[index];
-    if (!profile) return;
-
-    if (!confirm(`Profil "${profile.name}" wirklich löschen?`)) return;
-
-    // Öffne Integration-Config zum Löschen
-    this._showToast('Bitte lösche das Profil über die Integration-Einstellungen', 'warning');
-    this._openIntegrationConfig();
   }
 
   async _callService(service) {
@@ -624,6 +1126,7 @@ class ShutterPilotCard extends HTMLElement {
       this._showToast(`Service "${service}" ausgeführt`);
     } catch (err) {
       this._showToast(`Fehler: ${err.message}`, 'error');
+      console.error('Service call error:', err);
     }
   }
 
@@ -636,9 +1139,11 @@ class ShutterPilotCard extends HTMLElement {
         entity_id: this._config.entity
       });
       this._showToast(`Globale Automatik ${checked ? 'aktiviert' : 'deaktiviert'}`);
-      this.render();
+      
+      setTimeout(() => this.render(), 300);
     } catch (err) {
       this._showToast(`Fehler: ${err.message}`, 'error');
+      console.error('Toggle global auto error:', err);
     }
   }
 
@@ -669,40 +1174,28 @@ class ShutterPilotCard extends HTMLElement {
       'time_only': 'Nur Zeit',
       'sun': 'Sonnenstand',
       'golden_hour': 'Golden Hour',
+      'brightness': 'Helligkeitssensor',
     };
     return map[mode] || mode || 'Unbekannt';
   }
 
   _formatDate(dateStr) {
     if (!dateStr) return '-';
-    // Format: MM-DD -> DD.MM.
     const parts = dateStr.split('-');
     if (parts.length !== 2) return dateStr;
     return `${parts[1]}.${parts[0]}.`;
   }
 
   _showToast(message, type = 'info') {
-    const event = new Event('hass-notification', {
+    const event = new CustomEvent('hass-notification', {
       bubbles: true,
       composed: true,
+      detail: { message }
     });
-    event.detail = { message };
     this.dispatchEvent(event);
 
-    // Fallback: Console
     const prefix = type === 'error' ? '❌' : type === 'warning' ? '⚠️' : '✅';
     console.log(`${prefix} ${message}`);
-  }
-
-  _showDialog(title, content) {
-    const event = new Event('hass-more-info', {
-      bubbles: true,
-      composed: true,
-    });
-    this.dispatchEvent(event);
-
-    // Fallback: alert
-    alert(`${title}\n\n${content.replace(/<br>/g, '\n').replace(/<[^>]*>/g, '')}`);
   }
 
   _getStyles() {
@@ -718,19 +1211,20 @@ class ShutterPilotCard extends HTMLElement {
       }
 
       .card-container {
-        background: var(--ha-card-background, var(--card-background-color, white));
+        background: var(--card-background-color, #1c1c1e);
         border-radius: var(--ha-card-border-radius, 12px);
-        box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,0.1));
+        box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,0.3));
         overflow: hidden;
+        color: var(--primary-text-color, #e1e1e1);
       }
 
-      /* Header */
+      /* Header - Dark Mode optimiert */
       .card-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         padding: 20px 24px;
-        background: linear-gradient(135deg, var(--primary-color, #3b82f6), var(--primary-color-dark, #2563eb));
+        background: linear-gradient(135deg, #1a73e8, #0d47a1);
         color: white;
       }
 
@@ -760,7 +1254,7 @@ class ShutterPilotCard extends HTMLElement {
       }
 
       .icon-button {
-        background: rgba(255,255,255,0.2);
+        background: rgba(255,255,255,0.15);
         border: none;
         border-radius: 8px;
         width: 40px;
@@ -774,15 +1268,15 @@ class ShutterPilotCard extends HTMLElement {
       }
 
       .icon-button:hover {
-        background: rgba(255,255,255,0.3);
+        background: rgba(255,255,255,0.25);
         transform: scale(1.05);
       }
 
-      /* Tabs */
+      /* Tabs - Dark Mode */
       .tabs {
         display: flex;
-        border-bottom: 1px solid var(--divider-color, #e5e7eb);
-        background: var(--primary-background-color, #fafafa);
+        border-bottom: 1px solid var(--divider-color, #333);
+        background: var(--primary-background-color, #2c2c2e);
       }
 
       .tab {
@@ -793,7 +1287,7 @@ class ShutterPilotCard extends HTMLElement {
         cursor: pointer;
         font-size: 14px;
         font-weight: 500;
-        color: var(--secondary-text-color, #6b7280);
+        color: var(--secondary-text-color, #999);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -803,38 +1297,40 @@ class ShutterPilotCard extends HTMLElement {
       }
 
       .tab:hover {
-        background: rgba(0,0,0,0.05);
+        background: rgba(255,255,255,0.05);
+        color: var(--primary-text-color, #e1e1e1);
       }
 
       .tab.active {
-        color: var(--primary-color, #3b82f6);
-        border-bottom-color: var(--primary-color, #3b82f6);
-        background: white;
+        color: #1a73e8;
+        border-bottom-color: #1a73e8;
+        background: var(--card-background-color, #1c1c1e);
       }
 
-      /* Content */
+      /* Content - Dark Mode */
       .card-content {
         padding: 24px;
         min-height: 300px;
+        background: var(--card-background-color, #1c1c1e);
       }
 
       /* Empty State */
       .empty-state {
         text-align: center;
         padding: 60px 20px;
-        color: var(--secondary-text-color, #6b7280);
+        color: var(--secondary-text-color, #999);
       }
 
       .empty-state ha-icon {
         --mdc-icon-size: 64px;
-        color: var(--disabled-text-color, #9ca3af);
+        color: var(--disabled-text-color, #666);
         margin-bottom: 20px;
       }
 
       .empty-state h3 {
         font-size: 20px;
         margin-bottom: 8px;
-        color: var(--primary-text-color);
+        color: var(--primary-text-color, #e1e1e1);
       }
 
       .empty-state p {
@@ -856,7 +1352,7 @@ class ShutterPilotCard extends HTMLElement {
         gap: 8px;
       }
 
-      /* Buttons */
+      /* Buttons - Dark Mode */
       .btn {
         padding: 10px 20px;
         border: none;
@@ -872,23 +1368,24 @@ class ShutterPilotCard extends HTMLElement {
       }
 
       .btn-primary {
-        background: var(--primary-color, #3b82f6);
+        background: #1a73e8;
         color: white;
       }
 
       .btn-primary:hover {
-        background: var(--primary-color-dark, #2563eb);
+        background: #1557b0;
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        box-shadow: 0 4px 12px rgba(26, 115, 232, 0.4);
       }
 
       .btn-secondary {
-        background: var(--secondary-background-color, #f3f4f6);
-        color: var(--primary-text-color, #111827);
+        background: var(--secondary-background-color, #2c2c2e);
+        color: var(--primary-text-color, #e1e1e1);
+        border: 1px solid var(--divider-color, #444);
       }
 
       .btn-secondary:hover {
-        background: var(--divider-color, #e5e7eb);
+        background: var(--divider-color, #3a3a3c);
       }
 
       .btn-block {
@@ -902,7 +1399,7 @@ class ShutterPilotCard extends HTMLElement {
         padding: 6px;
         cursor: pointer;
         border-radius: 6px;
-        color: var(--secondary-text-color, #6b7280);
+        color: var(--secondary-text-color, #999);
         transition: all 0.2s;
         display: flex;
         align-items: center;
@@ -910,35 +1407,54 @@ class ShutterPilotCard extends HTMLElement {
       }
 
       .btn-icon:hover {
-        background: var(--secondary-background-color, #f3f4f6);
-        color: var(--primary-text-color);
+        background: rgba(255,255,255,0.1);
+        color: var(--primary-text-color, #e1e1e1);
       }
 
-      /* Table */
+      .btn-icon-dialog {
+        background: transparent;
+        border: none;
+        padding: 8px;
+        cursor: pointer;
+        border-radius: 8px;
+        color: var(--secondary-text-color, #999);
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .btn-icon-dialog:hover {
+        background: rgba(255,255,255,0.1);
+        color: var(--primary-text-color, #e1e1e1);
+      }
+
+      /* Table - Dark Mode optimiert */
       .profile-table {
-        background: white;
+        background: var(--card-background-color, #1c1c1e);
         border-radius: 12px;
         overflow: hidden;
-        border: 1px solid var(--divider-color, #e5e7eb);
+        border: 1px solid var(--divider-color, #333);
       }
 
       .table-header {
         display: flex;
-        background: var(--secondary-background-color, #f9fafb);
+        background: var(--secondary-background-color, #2c2c2e);
         font-weight: 600;
         font-size: 12px;
         text-transform: uppercase;
-        color: var(--secondary-text-color, #6b7280);
+        color: var(--secondary-text-color, #999);
         padding: 12px 16px;
-        border-bottom: 2px solid var(--divider-color, #e5e7eb);
+        border-bottom: 2px solid var(--divider-color, #444);
       }
 
       .table-row {
         display: flex;
         align-items: center;
         padding: 16px;
-        border-bottom: 1px solid var(--divider-color, #e5e7eb);
+        border-bottom: 1px solid var(--divider-color, #2a2a2c);
         transition: all 0.2s;
+        background: var(--card-background-color, #1c1c1e);
       }
 
       .table-row:last-child {
@@ -946,18 +1462,17 @@ class ShutterPilotCard extends HTMLElement {
       }
 
       .table-row:hover {
-        background: var(--primary-background-color, #f9fafb);
+        background: rgba(255,255,255,0.05);
       }
 
       .table-row.disabled {
-        opacity: 0.6;
+        opacity: 0.5;
       }
 
       .th, .td {
         padding: 0 8px;
       }
 
-      .th-checkbox, .td-checkbox { width: 50px; }
       .th-status, .td-status { width: 100px; }
       .th-name, .td-name { flex: 1; min-width: 150px; }
       .th-cover, .td-cover { flex: 1; min-width: 200px; }
@@ -967,25 +1482,26 @@ class ShutterPilotCard extends HTMLElement {
 
       .td-name strong {
         font-weight: 600;
-        color: var(--primary-text-color);
+        color: var(--primary-text-color, #e1e1e1);
       }
 
       .disabled-label {
         font-size: 11px;
-        color: var(--secondary-text-color);
+        color: var(--secondary-text-color, #999);
         font-weight: normal;
         margin-left: 8px;
       }
 
       .td-cover code {
-        background: var(--secondary-background-color, #f3f4f6);
+        background: var(--secondary-background-color, #2c2c2e);
         padding: 4px 8px;
         border-radius: 4px;
         font-size: 12px;
         font-family: 'Courier New', monospace;
+        color: #4fc3f7;
       }
 
-      /* Status Badge */
+      /* Status Badge - High Contrast */
       .status-badge {
         display: inline-block;
         padding: 4px 12px;
@@ -996,30 +1512,30 @@ class ShutterPilotCard extends HTMLElement {
       }
 
       .status-active {
-        background: #d1fae5;
-        color: #065f46;
+        background: #1b5e20;
+        color: #76ff03;
       }
 
       .status-inactive {
-        background: #f3f4f6;
-        color: #6b7280;
+        background: #424242;
+        color: #bdbdbd;
       }
 
       .status-cooldown {
-        background: #fef3c7;
-        color: #92400e;
+        background: #f57f17;
+        color: #fff59d;
       }
 
       .status-unknown {
-        background: #fee2e2;
-        color: #991b1b;
+        background: #b71c1c;
+        color: #ff8a80;
       }
 
       /* Area Badge */
       .area-badge {
         display: inline-block;
         padding: 4px 10px;
-        background: var(--primary-color, #3b82f6);
+        background: #1a73e8;
         color: white;
         border-radius: 6px;
         font-size: 11px;
@@ -1034,12 +1550,12 @@ class ShutterPilotCard extends HTMLElement {
 
       .sensor-icons ha-icon {
         --mdc-icon-size: 18px;
-        color: var(--secondary-text-color, #6b7280);
+        color: var(--secondary-text-color, #999);
       }
 
       .no-sensors {
         font-size: 12px;
-        color: var(--disabled-text-color, #9ca3af);
+        color: var(--disabled-text-color, #666);
       }
 
       /* Action Buttons */
@@ -1049,7 +1565,7 @@ class ShutterPilotCard extends HTMLElement {
         padding: 6px;
         cursor: pointer;
         border-radius: 6px;
-        color: var(--secondary-text-color, #6b7280);
+        color: var(--secondary-text-color, #999);
         transition: all 0.2s;
         display: inline-flex;
         align-items: center;
@@ -1057,13 +1573,14 @@ class ShutterPilotCard extends HTMLElement {
       }
 
       .action-btn:hover {
-        background: var(--secondary-background-color, #f3f4f6);
-        color: var(--primary-text-color);
+        background: rgba(255,255,255,0.1);
+        color: var(--primary-text-color, #e1e1e1);
+        transform: scale(1.1);
       }
 
       .action-delete:hover {
-        background: #fee2e2;
-        color: #dc2626;
+        background: #b71c1c;
+        color: #ff8a80;
       }
 
       /* Areas Grid */
@@ -1074,16 +1591,17 @@ class ShutterPilotCard extends HTMLElement {
       }
 
       .area-card {
-        background: white;
-        border: 1px solid var(--divider-color, #e5e7eb);
+        background: var(--secondary-background-color, #2c2c2e);
+        border: 1px solid var(--divider-color, #444);
         border-radius: 12px;
         padding: 20px;
         transition: all 0.2s;
       }
 
       .area-card:hover {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         transform: translateY(-2px);
+        border-color: #1a73e8;
       }
 
       .area-header {
@@ -1092,20 +1610,20 @@ class ShutterPilotCard extends HTMLElement {
         align-items: center;
         margin-bottom: 16px;
         padding-bottom: 12px;
-        border-bottom: 2px solid var(--primary-color, #3b82f6);
+        border-bottom: 2px solid #1a73e8;
       }
 
       .area-header h3 {
         font-size: 18px;
         font-weight: 600;
-        color: var(--primary-text-color);
+        color: var(--primary-text-color, #e1e1e1);
       }
 
       .area-info .info-row {
         display: flex;
         justify-content: space-between;
         padding: 8px 0;
-        border-bottom: 1px solid var(--divider-color, #e5e7eb);
+        border-bottom: 1px solid var(--divider-color, #333);
       }
 
       .area-info .info-row:last-child {
@@ -1114,13 +1632,13 @@ class ShutterPilotCard extends HTMLElement {
 
       .area-info .label {
         font-size: 13px;
-        color: var(--secondary-text-color, #6b7280);
+        color: var(--secondary-text-color, #999);
       }
 
       .area-info .value {
         font-size: 13px;
         font-weight: 500;
-        color: var(--primary-text-color);
+        color: var(--primary-text-color, #e1e1e1);
       }
 
       /* Global Settings */
@@ -1130,8 +1648,8 @@ class ShutterPilotCard extends HTMLElement {
       }
 
       .setting-card {
-        background: white;
-        border: 1px solid var(--divider-color, #e5e7eb);
+        background: var(--secondary-background-color, #2c2c2e);
+        border: 1px solid var(--divider-color, #444);
         border-radius: 12px;
         padding: 24px;
         margin-bottom: 20px;
@@ -1147,13 +1665,13 @@ class ShutterPilotCard extends HTMLElement {
       .setting-header h3 {
         font-size: 18px;
         font-weight: 600;
-        color: var(--primary-text-color);
+        color: var(--primary-text-color, #e1e1e1);
         margin: 0;
       }
 
       .setting-description {
         font-size: 14px;
-        color: var(--secondary-text-color, #6b7280);
+        color: var(--secondary-text-color, #999);
         margin: 0;
       }
 
@@ -1161,7 +1679,7 @@ class ShutterPilotCard extends HTMLElement {
         font-size: 16px;
         font-weight: 600;
         margin-bottom: 16px;
-        color: var(--primary-text-color);
+        color: var(--primary-text-color, #e1e1e1);
       }
 
       .info-grid {
@@ -1178,17 +1696,17 @@ class ShutterPilotCard extends HTMLElement {
 
       .info-item .label {
         font-size: 12px;
-        color: var(--secondary-text-color, #6b7280);
+        color: var(--secondary-text-color, #999);
       }
 
       .info-item .value {
         font-size: 16px;
         font-weight: 600;
-        color: var(--primary-text-color);
+        color: var(--primary-text-color, #e1e1e1);
       }
 
       .badge {
-        background: var(--primary-color, #3b82f6);
+        background: #1a73e8;
         color: white;
         padding: 2px 10px;
         border-radius: 12px;
@@ -1202,7 +1720,7 @@ class ShutterPilotCard extends HTMLElement {
         gap: 12px;
       }
 
-      /* Toggle Switch */
+      /* Toggle Switch - Dark Mode */
       .switch {
         position: relative;
         display: inline-block;
@@ -1223,7 +1741,7 @@ class ShutterPilotCard extends HTMLElement {
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: #ccc;
+        background-color: #666;
         transition: .3s;
         border-radius: 28px;
       }
@@ -1241,11 +1759,195 @@ class ShutterPilotCard extends HTMLElement {
       }
 
       input:checked + .slider {
-        background-color: var(--primary-color, #3b82f6);
+        background-color: #1a73e8;
       }
 
       input:checked + .slider:before {
         transform: translateX(22px);
+      }
+
+      /* Dialog - Dark Mode */
+      .dialog-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 20px;
+      }
+
+      .dialog {
+        background: var(--card-background-color, #1c1c1e);
+        border-radius: 16px;
+        max-width: 800px;
+        width: 100%;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        border: 1px solid var(--divider-color, #444);
+      }
+
+      .dialog-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 24px;
+        border-bottom: 1px solid var(--divider-color, #333);
+      }
+
+      .dialog-header h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--primary-text-color, #e1e1e1);
+      }
+
+      .dialog-tabs {
+        display: flex;
+        border-bottom: 1px solid var(--divider-color, #333);
+        padding: 0 24px;
+        background: var(--secondary-background-color, #2c2c2e);
+      }
+
+      .dialog-tab {
+        padding: 12px 20px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--secondary-text-color, #999);
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s;
+      }
+
+      .dialog-tab:hover {
+        color: var(--primary-text-color, #e1e1e1);
+      }
+
+      .dialog-tab.active {
+        color: #1a73e8;
+        border-bottom-color: #1a73e8;
+      }
+
+      .dialog-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px;
+      }
+
+      .dialog-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        padding: 20px 24px;
+        border-top: 1px solid var(--divider-color, #333);
+      }
+
+      /* Form - Dark Mode optimiert */
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      .form-group label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--primary-text-color, #e1e1e1);
+      }
+
+      .form-group label ha-icon {
+        --mdc-icon-size: 20px;
+        color: var(--secondary-text-color, #999);
+      }
+
+      .form-hint {
+        display: block;
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--secondary-text-color, #999);
+      }
+
+      .highlight-sensor {
+        background: rgba(26, 115, 232, 0.1);
+        padding: 16px;
+        border-radius: 8px;
+        border: 2px solid rgba(26, 115, 232, 0.3);
+      }
+
+      .highlight-sensor label {
+        color: #4fc3f7;
+        font-weight: 600;
+      }
+
+      .highlight-sensor label ha-icon {
+        color: #ffeb3b;
+      }
+
+      .form-input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--divider-color, #444);
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+        background: var(--secondary-background-color, #2c2c2e);
+        color: var(--primary-text-color, #e1e1e1);
+        transition: all 0.2s;
+      }
+
+      .form-input:focus {
+        outline: none;
+        border-color: #1a73e8;
+        box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.2);
+      }
+
+      .form-input option {
+        background: var(--card-background-color, #1c1c1e);
+        color: var(--primary-text-color, #e1e1e1);
+      }
+
+      .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .form-section-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 24px 0 16px 0;
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--divider-color, #444);
+        color: var(--primary-text-color, #e1e1e1);
+      }
+
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .checkbox-label input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+      }
+
+      .checkbox-label span {
+        font-size: 14px;
+        color: var(--primary-text-color, #e1e1e1);
       }
 
       /* Responsive */
@@ -1281,6 +1983,10 @@ class ShutterPilotCard extends HTMLElement {
         .info-grid {
           grid-template-columns: 1fr;
         }
+
+        .form-row {
+          grid-template-columns: 1fr;
+        }
       }
     `;
   }
@@ -1290,21 +1996,19 @@ class ShutterPilotCard extends HTMLElement {
   }
 }
 
-// Registriere Custom Element
 customElements.define('shutterpilot-card', ShutterPilotCard);
 
-// Registriere in Lovelace
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'shutterpilot-card',
   name: 'ShutterPilot Management Card',
-  description: 'Professional management card for ShutterPilot integration',
+  description: 'Professional management card for ShutterPilot - Dark Mode + Full Configuration',
   preview: true,
   documentationURL: 'https://github.com/fschube/shutterpilot'
 });
 
 console.info(
-  '%c  SHUTTERPILOT-CARD  \n%c  Version 1.0.0 - Production Ready ',
-  'color: white; background: #3b82f6; font-weight: 700;',
-  'color: #3b82f6; font-weight: 300;'
+  '%c  SHUTTERPILOT-CARD  \n%c  Version 2.0.1 - Brightness + Fixed Save ',
+  'color: white; background: #1a73e8; font-weight: 700;',
+  'color: #1a73e8; font-weight: 300;'
 );
