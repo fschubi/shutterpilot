@@ -1,195 +1,404 @@
-# ShutterPilot
+# ShutterPilot v0.3.0 - Enterprise Rollladensteuerung
 
-HACS Integration für intelligente, sensorbasierte Rollladensteuerung für Home Assistant mit automatischer Beschattung, Fenster-/Türüberwachung und Cooldown-Logik.
+🎯 **Professional** HACS Integration für intelligente, sensorbasierte Rollladensteuerung für Home Assistant.
 
-## Features
+## ⭐ Features v0.3.0
 
-✅ **Vollautomatische Steuerung** basierend auf:
-- 🌞 Sonnenstand (Azimut & Elevation)
-- 🌡️ Temperatur- und Helligkeitssensoren
-- 🪟 Fenster- und Türkontakten
-- ⏰ Zeitplänen und Tageslichtlogik
-- ❄️ Cooldown-System zur Vermeidung unnötiger Bewegungen
+### 🏠 **Bereichs-Management (NEU!)**
+- ✅ **3 vordefinierte Bereiche**: Wohn-, Schlaf- und Kinderbereich
+- ✅ **Zeit-Templates pro Bereich** mit Wochentag/Wochenende
+- ✅ **3 Steuerungsarten**: Nur Zeit, Sonnenstand, Golden Hour
+- ✅ **Profile automatisch zuordnen** (übernehmen Bereichs-Zeiten)
 
-✅ **Mehrere Profile** pro Integration - jeder Rollladen individuell konfigurierbar  
-✅ **Profil-spezifische Switches** - Automatik pro Rollladen individuell ein/ausschaltbar  
-✅ **Status-Sensoren** - Vollständige Transparenz über Status, letzte Aktion, Cooldown und Sonnenstand  
-✅ **Manuelle Steuerung** bleibt jederzeit möglich  
-✅ **Zentrale Konfiguration** über Home Assistant UI (ConfigFlow)  
-✅ **Services** für globale Aktionen (alle hoch/runter, Stopp, Neuberechnung)
+### 📊 **Professional Management Card (NEU!)**
+- ✅ **Tabellarische Übersicht** aller Profile
+- ✅ **Schnellaktionen**: Bearbeiten, Kopieren, Löschen
+- ✅ **Status-Anzeige** pro Profil (Aktiv/Inaktiv/Cooldown)
+- ✅ **Tab-Navigation**: Profile, Bereiche, Global
+- ✅ **Modern & Responsive** Design
 
-## Installation (HACS)
+### 🚀 **Erweiterte Automatisierung**
+- ✅ **Hysterese für Sensoren** - Verhindert Flackern (0-100%)
+- ✅ **Fenster-Verzögerungen** - Delays beim Öffnen/Schließen
+- ✅ **Zwischenposition** - Z.B. für Weihnachtsbeleuchtung
+- ✅ **Wärmeschutz** - Vollständiges Schließen bei Hitze
+- ✅ **Im Sonnenschutz halten** - Rollladen bleibt bis zum Abend
+- ✅ **Sommer-Ausnahme** - Nicht schließen im Sommer
+
+### 💡 **Basis-Features**
+- 🌞 **Sonnenstand-basiert** (Azimut & Elevation)
+- 🌡️ **Temperatur- und Helligkeitssensoren**
+- 🪟 **Fenster- und Türüberwachung**
+- ⏰ **Zeitpläne und Golden Hour**
+- ❄️ **Cooldown-System**
+- 🔧 **Profil-spezifische Switches & Sensoren**
+- 🎛️ **Services** für globale Aktionen
+
+---
+
+## 📦 Installation
+
+### 1. HACS Installation
 
 1. HACS öffnen → **Custom repositories**
 2. Repository hinzufügen: `https://github.com/fschube/shutterpilot` (Kategorie: **Integration**)
 3. HACS → **Integrations** → **ShutterPilot** installieren
 4. Home Assistant neu starten
-5. **Einstellungen** → **Geräte & Dienste** → **Integrationen** → **ShutterPilot** hinzufügen
 
-## Konfiguration
+### 2. Integration einrichten
 
-### Initial Setup
+1. **Einstellungen** → **Geräte & Dienste** → **Integrationen**
+2. **Integration hinzufügen** → "ShutterPilot" suchen
+3. Globale Einstellungen konfigurieren:
+   - Automatik global aktiv
+   - Standard Lüftungsposition (0-80%)
+   - Standard Cooldown (0-900 Sekunden)
 
-Bei der ersten Einrichtung werden globale Standardwerte festgelegt:
-- **Automatik global aktiv**: Master-Schalter für alle Profile
-- **Standard Lüftungsposition**: Position bei geöffnetem Fenster (0-80%)
-- **Standard Cooldown**: Wartezeit nach Fensterschließung (0-900 Sekunden)
+### 3. Management Card installieren (Optional aber empfohlen!)
+
+#### Schritt 1: Ressource hinzufügen
+
+1. **Einstellungen** → **Dashboards** → **⋮ Menü** → **Ressourcen**
+2. **Ressource hinzufügen**:
+   - **URL**: `/local/community/shutterpilot/shutterpilot-card.js`
+   - **Ressourcentyp**: JavaScript-Modul
+3. **Erstellen** klicken
+
+#### Schritt 2: Karte hinzufügen
+
+1. Dashboard öffnen → **Bearbeiten**
+2. **Karte hinzufügen** → **Benutzerdefiniert: ShutterPilot Card**
+3. Konfiguration:
+
+```yaml
+type: custom:shutterpilot-card
+entity: switch.shutterpilot_global_automation
+```
+
+#### Alternative: Manuelle YAML-Konfiguration
+
+```yaml
+type: custom:shutterpilot-card
+entity: switch.shutterpilot_global_automation
+title: ShutterPilot Management  # Optional
+show_toolbar: true              # Optional, default: true
+```
+
+---
+
+## ⚙️ Konfiguration
+
+### Bereiche konfigurieren
+
+1. **Geräte & Dienste** → **ShutterPilot** → **Konfigurieren**
+2. **Bereiche verwalten** auswählen
+3. Bereich bearbeiten (Wohn/Schlaf/Kinder):
+   - **Name**: Bezeichnung des Bereichs
+   - **Modus**: Zeit / Sonnenstand / Golden Hour
+   - **Zeiten Wochentag**: Hoch-/Runterfahrzeit (HH:MM)
+   - **Zeiten Wochenende**: Hoch-/Runterfahrzeit (HH:MM)
+   - **Früheste Hochfahrzeit**: Nicht vor dieser Zeit
+   - **Späteste Hochfahrzeit**: Spätestens zu dieser Zeit
+   - **Verzögerung**: Sekunden zwischen Rollläden (0-300)
 
 ### Profile erstellen
 
-Über **Optionen** der Integration können Profile hinzugefügt werden. Jedes Profil benötigt:
+#### Via Management Card (Empfohlen):
+1. Öffne die ShutterPilot Card
+2. Klicke **"Neues Profil"**
+3. Fülle die Tabs aus:
+   - **Basis**: Name, Cover, Bereich
+   - **Sensoren**: Fenster, Tür, Lux, Temperatur
+   - **Sonnenschutz**: Schwellwerte, Azimut, Hysterese
+   - **Erweitert**: Verzögerungen, Wärmeschutz, etc.
 
-**Pflichtfelder:**
-- **Name**: Bezeichnung des Profils
-- **Cover Entity**: Rollladen-Entity (z.B. `cover.wohnzimmer_rollladen`)
+#### Via Config Flow:
+1. **Geräte & Dienste** → **ShutterPilot** → **Konfigurieren**
+2. **Aktion**: "Neues Profil hinzufügen"
 
-**Optionale Sensoren:**
-- **Fenster-Sensor**: Binary Sensor für Fensterkontakt
-- **Tür-Sensor**: Binary Sensor für Türkontakt
-- **Lux-Sensor**: Helligkeitssensor
-- **Temperatur-Sensor**: Temperatursensor
+**Basis-Einstellungen:**
+- ✅ **Name**: Bezeichnung des Profils
+- ✅ **Cover Entity**: Rollladen-Entity (`cover.xyz`)
+- ✅ **Bereich zuordnen**: Wohn/Schlaf/Kinder/Keiner
+
+**Sensoren (Optional):**
+- 🪟 **Fenster-Sensor**: Binary Sensor für Fensterkontakt
+- 🚪 **Tür-Sensor**: Binary Sensor für Türkontakt
+- ☀️ **Lux-Sensor**: Helligkeitssensor (mit Device-Class `illuminance`)
+- 🌡️ **Temperatur-Sensor**: Temperatursensor (mit Device-Class `temperature`)
 
 **Positionen:**
-- **Tag-Position**: Position bei Beschattungsbedarf (default: 40%)
-- **Nacht-Position**: Position nachts (default: 0%)
-- **Lüftungsposition**: Position bei geöffnetem Fenster
-- **Tür-Sicherheitsposition**: Mindestposition bei geöffneter Tür
+- **Tagesposition**: 0-100% (Standard: 40%)
+- **Nachtposition**: 0-100% (Standard: 0%)
+- **Lüftungsposition**: 0-80% (bei offenem Fenster)
+- **Sichere Tür-Position**: 0-80% (bei offener Tür)
 
-**Beschattungslogik:**
-- **Lux-Schwellwert**: Ab diesem Wert wird beschattet (default: 20000)
-- **Temperatur-Schwellwert**: Ab diesem Wert wird beschattet (default: 26°C)
-- **Azimut-Min/Max**: Sonnenstand-Bereich für Beschattung (-360 bis 360°)
+**Sonnenschutz:**
+- **Helligkeits-Schwellwert**: Z.B. 20000 lx
+- **Helligkeits-Hysterese**: 0-100% (verhindert Flackern)
+- **Temperatur-Schwellwert**: Z.B. 26°C
+- **Temperatur-Hysterese**: 0-100%
+- **Azimut Min/Max**: Sonnenwinkel (-360° bis 360°)
 
-**Zeitpläne:**
-- **Up-Time**: Fester Zeitpunkt zum Öffnen (Format: HH:MM)
-- **Down-Time**: Fester Zeitpunkt zum Schließen (Format: HH:MM)
+**Erweiterte Features:**
+- ⏱️ **Fenster öffnen Verzögerung**: 0-300 Sekunden
+- ⏱️ **Fenster schließen Verzögerung**: 0-300 Sekunden
+- 🎄 **Zwischenposition**: 0-100% (z.B. für Weihnachten)
+- 🎄 **Zwischenzeit**: HH:MM
+- 🔥 **Wärmeschutz**: Bei Hitze vollständig schließen
+- 🔥 **Wärmeschutz-Temperatur**: Z.B. 30°C
+- 🌞 **Im Sonnenschutz halten**: Bis zum Abend
+- ☀️ **Helligkeits-Ende Verzögerung**: 0-60 Minuten
+- ☀️ **Im Sommer nicht schließen**: Verwendet globalen Sommerzeitraum
 
-**Erweitert:**
-- **Cooldown**: Individuelle Wartezeit nach Fensterschließung (0-1800 Sekunden)
-- **Aktiviert**: Profil kann temporär deaktiviert werden
+**Zeit-Überschreibungen:**
+- **Hochfahrzeit**: HH:MM (überschreibt Bereichszeit)
+- **Runterfahrzeit**: HH:MM (überschreibt Bereichszeit)
 
-## Services
+**Licht-Automation:**
+- 💡 **Licht-Entity**: Light Entity (`light.xyz`)
+- 💡 **Helligkeit**: 0-100%
+- 💡 **Bei Beschattung**: Licht einschalten
+- 💡 **Bei Nacht**: Licht einschalten
 
-Die Integration stellt folgende Services bereit:
+---
 
-### `shutterpilot.all_up`
-Alle konfigurierten Rollläden öffnen.
+## 🎮 Verwendung
 
-### `shutterpilot.all_down`
-Alle Rollläden herunterfahren (unter Berücksichtigung von Fenster-/Türlogik).
+### Via Management Card
 
-### `shutterpilot.stop`
-Alle Rollläden stoppen.
+Die **ShutterPilot Card** bietet eine übersichtliche Oberfläche:
 
-### `shutterpilot.recalculate_now`
-Sofortige Neuberechnung aller Profile (umgeht Cooldown).
+#### **Profile-Tab:**
+- Tabellarische Übersicht aller Profile
+- Status-Anzeige (Aktiv/Inaktiv/Cooldown)
+- Sensor-Icons (Fenster/Tür/Lux/Temp)
+- Aktionen: Info, Bearbeiten, Kopieren, Löschen
+- Schnellaktionen: Alle hoch/runter/stopp
 
-## Entscheidungslogik
+#### **Bereiche-Tab:**
+- Übersicht aller 3 Bereiche
+- Zeiten und Modus pro Bereich
+- Anzahl zugeordneter Profile
+- Bereich bearbeiten
 
-Die Steuerung folgt folgender Priorität:
+#### **Global-Tab:**
+- Globale Automatik ein/aus
+- Services ausführen
+- Sommerzeitraum anzeigen
+- Standard-Werte einsehen
 
-1. **Tür offen** → Tür-Sicherheitsposition (höchste Position)
-2. **Fenster offen** → Lüftungsposition
-3. **Cooldown aktiv** → Keine Aktion
-4. **Zeitplan-Match** → Entsprechend öffnen/schließen
-5. **Sonnenstand + Sensoren** → Beschattung bei Bedarf oder öffnen
-6. **Nacht** → Nacht-Position
+### Entities
 
-## UI Entities
+Nach der Einrichtung werden automatisch erstellt:
 
-Die Integration erstellt automatisch folgende Entities:
+#### **Switches:**
+- `switch.shutterpilot_global_automation` - Master-Schalter
+- `switch.shutterpilot_<profil>_automation` - Pro Profil
 
-### Globale Entities
+#### **Sensors:**
+- `sensor.shutterpilot_<profil>_status` - Status (Aktiv/Inaktiv/Cooldown)
+- `sensor.shutterpilot_<profil>_last_action` - Letzte Aktion & Grund
+- `sensor.shutterpilot_<profil>_cooldown_remaining` - Verbleibender Cooldown (Sekunden)
+- `sensor.shutterpilot_<profil>_sun_elevation` - Sonnenhöhe + Attribute (Azimut, Range)
 
-- **Switch**: `switch.shutterpilot_automatik_global` - Globale Automatik ein/aus (Master-Schalter)
-- **Number**: `number.shutterpilot_standard_lueftungsposition` - Standard Lüftungsposition (0-80%)
+#### **Number:**
+- `number.shutterpilot_default_ventilation_position` - Standard Lüftungsposition
 
-### Profil-spezifische Entities
-
-Für **jedes Profil** werden automatisch folgende Entities erstellt:
-
-#### Switches
-
-- **Switch**: `switch.shutterpilot_automatik_[profilname]` - Automatik für dieses Profil ein/aus
-  
-  Beispiel: `switch.shutterpilot_automatik_wohnzimmer`
-
-#### Sensoren
-
-Jedes Profil erhält 4 Status-Sensoren:
-
-1. **Status-Sensor**: `sensor.shutterpilot_[profilname]_status`
-   - Zeigt aktuellen Status: `"active"`, `"inactive"` oder `"cooldown"`
-   - Attributes: Profilname, Enabled-Status, Cover-Entity
-
-2. **Letzte Aktion-Sensor**: `sensor.shutterpilot_[profilname]_letzte_aktion`
-   - Zeigt Grund der letzten Entscheidung (deutsch übersetzt)
-   - Mögliche Werte: "Tür offen", "Fenster offen", "Sonnenbeschattung", "Nachtmodus", "Zeitplan - Öffnen", etc.
-   - Attributes: Profilname, Raw-Reason (englisch)
-
-3. **Cooldown-Sensor**: `sensor.shutterpilot_[profilname]_cooldown_verbleibend`
-   - Zeigt verbleibende Cooldown-Zeit in Sekunden (0 wenn kein Cooldown aktiv)
-   - Unit: Sekunden (s)
-   - Attributes: Profilname, Cooldown aktiv (boolean), Gesamt-Cooldown-Zeit
-
-4. **Sonnenstand-Sensor**: `sensor.shutterpilot_[profilname]_sonnenstand_elevation`
-   - Zeigt aktuelle Sonnen-Elevation in Grad
-   - Unit: Grad (°)
-   - Attributes: Profilname, Azimut, Azimut-Min/Max, In Azimut-Bereich (boolean)
-
-**Beispiel für Profil "Wohnzimmer":**
-```
-switch.shutterpilot_automatik_wohnzimmer
-sensor.shutterpilot_wohnzimmer_status
-sensor.shutterpilot_wohnzimmer_letzte_aktion
-sensor.shutterpilot_wohnzimmer_cooldown_verbleibend
-sensor.shutterpilot_wohnzimmer_sonnenstand_elevation
-```
-
-### Verwendung in Automatisierungen
-
-Die Status-Sensoren können direkt in Automatisierungen verwendet werden:
+### Services
 
 ```yaml
-# Beispiel: Benachrichtigung wenn Cooldown aktiv
-trigger:
-  - platform: numeric_state
-    entity_id: sensor.shutterpilot_wohnzimmer_cooldown_verbleibend
-    above: 0
+# Alle Rollläden öffnen
+service: shutterpilot.all_up
 
-# Beispiel: Reaktion auf Status-Änderung
-trigger:
-  - platform: state
-    entity_id: sensor.shutterpilot_wohnzimmer_status
-    to: "cooldown"
+# Alle Rollläden schließen (mit Fenster/Tür-Logik)
+service: shutterpilot.all_down
 
-# Beispiel: Abhängig von letzter Aktion
-condition:
-  - condition: state
-    entity_id: sensor.shutterpilot_wohnzimmer_letzte_aktion
-    state: "Sonnenbeschattung"
+# Alle Rollläden stoppen
+service: shutterpilot.stop
+
+# Sofortige Neuberechnung (umgeht Cooldown)
+service: shutterpilot.recalculate_now
 ```
 
-## Versionshistorie
+---
 
-- **0.2.6+**: 
-  - ✅ Profil-spezifische Switch-Entities (Automatik pro Profil ein/aus)
-  - ✅ Status-Sensor-Platform mit 4 Sensoren pro Profil:
-    - Status-Sensor (active/inactive/cooldown)
-    - Letzte Aktion-Sensor (deutsch übersetzt)
-    - Cooldown-Remaining-Sensor (in Sekunden)
-    - Sonnenstand-Elevation-Sensor (mit Azimut-Attributen)
-  - ✅ Vollständige Status-Transparenz für Debugging
-  - ✅ Auto-Update-Mechanismus für alle Sensoren
-  - ✅ Enterprise-Level Fehlerbehandlung und Logging
-- **0.2.6**: Vollständige Implementierung mit Profil-System, Sensoren, Cooldown-Logik
-- **0.1.0**: Grundgerüst (Config-Flow, globaler Auto-Switch)
+## 🧩 Beispiel-Automatisierungen
 
-## Support
+### Globale Automatik bei Abwesenheit deaktivieren
 
-- **Issues**: [GitHub Issues](https://github.com/fschube/shutterpilot/issues)
-- **Dokumentation**: [GitHub Repository](https://github.com/fschube/shutterpilot)
+```yaml
+automation:
+  - alias: "ShutterPilot bei Abwesenheit aus"
+    trigger:
+      - platform: state
+        entity_id: person.home
+        to: "not_home"
+    action:
+      - service: switch.turn_off
+        target:
+          entity_id: switch.shutterpilot_global_automation
+```
 
-## Lizenz
+### Einzelnes Profil zeitweise deaktivieren
 
-MIT License - siehe [LICENSE](LICENSE) Datei.
+```yaml
+automation:
+  - alias: "Wohnzimmer Rollladen manuell am Wochenende"
+    trigger:
+      - platform: time
+        at: "00:00:00"
+    condition:
+      - condition: time
+        weekday:
+          - sat
+          - sun
+    action:
+      - service: switch.turn_off
+        target:
+          entity_id: switch.shutterpilot_wohnzimmer_automation
+```
+
+### Benachrichtigung bei Cooldown
+
+```yaml
+automation:
+  - alias: "Benachrichtigung Rollladen Cooldown"
+    trigger:
+      - platform: state
+        entity_id: sensor.shutterpilot_wohnzimmer_status
+        to: "cooldown"
+    action:
+      - service: notify.mobile_app
+        data:
+          message: "Wohnzimmer Rollladen in Cooldown ({{ states('sensor.shutterpilot_wohnzimmer_cooldown_remaining') }}s)"
+```
+
+---
+
+## 📸 Screenshots
+
+### Management Card - Profile Tab
+![Profile Tab](docs/images/profiles-tab.png)
+*Tabellarische Übersicht aller Profile mit Status und Schnellaktionen*
+
+### Management Card - Bereiche Tab
+![Bereiche Tab](docs/images/areas-tab.png)
+*Übersicht und Verwaltung der 3 Bereiche*
+
+### Management Card - Global Tab
+![Global Tab](docs/images/global-tab.png)
+*Globale Einstellungen und Services*
+
+---
+
+## 🔧 Technische Details
+
+### Bereichs-Modi
+
+**Nur Zeit:**
+- Rollläden fahren zu festen Zeiten
+- Keine Sonnenstandsberechnung
+
+**Sonnenstand:**
+- Kombination aus Zeit und Sonnenauf-/-untergang
+- Rollläden fahren nicht vor frühester/nach spätester Zeit
+
+**Golden Hour:**
+- Wie Sonnenstand, aber mit Golden Hour als Referenz
+- Ca. 1 Stunde vor Sonnenuntergang / nach Sonnenaufgang
+
+### Hysterese-Logik
+
+Verhindert ständiges Auf-/Abfahren bei schwankenden Sensorwerten:
+
+**Beispiel Lux-Sensor:**
+- Schwellwert: 20000 lx
+- Hysterese: 20%
+- **Aktivierung**: bei ≥ 20000 lx
+- **Deaktivierung**: bei < 16000 lx (20% unter Schwellwert)
+
+### Cooldown-System
+
+Nach manuellen Änderungen wird der Cooldown aktiviert:
+- Verhindert sofortiges Zurückfahren
+- Konfigurierbarer Zeitraum (0-1800 Sekunden)
+- Sichtbar im Status-Sensor
+
+---
+
+## 🐛 Troubleshooting
+
+### Profile werden beim HA-Start nicht geladen
+
+**Problem**: "Cover entity not found" beim Start  
+**Lösung**: Race-Condition beim HA-Start - Profile validieren Entities zur Laufzeit. Nach vollständigem Start funktioniert es automatisch.
+
+### Management Card zeigt nicht an
+
+**Problem**: Card erscheint nicht im Dashboard  
+**Lösung**: 
+1. Prüfe ob Ressource korrekt hinzugefügt wurde
+2. Lösche Browser-Cache (Strg+Shift+R)
+3. Prüfe Browser-Konsole auf Fehler (F12)
+
+### Rollläden fahren nicht automatisch
+
+**Prüfungen:**
+1. Globale Automatik aktiv? (`switch.shutterpilot_global_automation`)
+2. Profil-Automatik aktiv? (`switch.shutterpilot_<profil>_automation`)
+3. Profil im Cooldown? (`sensor.shutterpilot_<profil>_status`)
+4. Fenster/Tür offen? (prüfe Aussperrschutz-Einstellungen)
+
+### Beschattung funktioniert nicht
+
+**Prüfungen:**
+1. Lux- und/oder Temp-Sensor konfiguriert?
+2. Schwellwerte erreicht?
+3. Sonnenwinkel im konfigurierten Bereich? (Azimut Min/Max)
+4. Sonnenhöhe über globalem Ende-Wert?
+
+---
+
+## 📝 Changelog
+
+### v0.3.0 (2025-01-XX) - Enterprise Release
+
+**🚀 Neue Features:**
+- Bereichs-Management (Wohn/Schlaf/Kinder)
+- Professional Management Card mit Tabellenansicht
+- Golden Hour Support
+- Hysterese für Lux/Temperatur-Sensoren
+- Fenster-Verzögerungen (öffnen/schließen)
+- Zwischenposition mit Zeitsteuerung
+- Wärmeschutz (vollständiges Schließen bei Hitze)
+- Im Sonnenschutz halten (bis zum Abend)
+- Sommer-Ausnahme (nicht schließen im Sommer)
+- Helligkeits-Ende Verzögerung
+- Licht-Automation (NEU)
+
+**🎨 Verbesserungen:**
+- Entity-Selektoren mit Auto-Vervollständigung
+- Vollständige deutsche und englische Übersetzungen
+- Globale Sonnen-Offsets
+- Sommerzeitraum konfigurierbar
+
+---
+
+## 📄 Lizenz
+
+MIT License - Siehe LICENSE Datei
+
+## 🤝 Contributing
+
+Contributions sind willkommen! Bitte erstelle ein Issue oder Pull Request auf GitHub.
+
+## 💬 Support
+
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/fschube/shutterpilot/issues)
+- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/fschube/shutterpilot/discussions)
+- 📖 **Dokumentation**: [GitHub Wiki](https://github.com/fschube/shutterpilot/wiki)
+
+---
+
+**Made with ❤️ for Home Assistant**
