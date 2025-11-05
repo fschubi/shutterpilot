@@ -17,9 +17,18 @@ from homeassistant.helpers.event import (
 
 from .const import (
     CONF_GLOBAL_AUTO, CONF_DEFAULT_VPOS, CONF_DEFAULT_COOLDOWN,
-    P_NAME, P_COVER, P_WINDOW, P_DOOR, P_DAY_POS, P_NIGHT_POS, P_VPOS,
-    P_DOOR_SAFE, P_LUX, P_TEMP, P_LUX_TH, P_TEMP_TH, P_UP_TIME, P_DOWN_TIME,
-    P_AZ_MIN, P_AZ_MAX, P_COOLDOWN, P_ENABLED,
+    CONF_AREAS, CONF_SUMMER_START, CONF_SUMMER_END, CONF_SUN_ELEVATION_END,
+    CONF_SUN_OFFSET_UP, CONF_SUN_OFFSET_DOWN,
+    AREA_LIVING, AREA_SLEEPING, AREA_CHILDREN,
+    A_NAME, A_MODE, A_UP_TIME_WEEK, A_DOWN_TIME_WEEK, A_UP_TIME_WEEKEND,
+    A_DOWN_TIME_WEEKEND, A_UP_EARLIEST, A_UP_LATEST, A_STAGGER_DELAY,
+    MODE_TIME_ONLY, MODE_SUN, MODE_GOLDEN_HOUR,
+    P_NAME, P_COVER, P_AREA, P_WINDOW, P_DOOR, P_DAY_POS, P_NIGHT_POS, P_VPOS,
+    P_DOOR_SAFE, P_LUX, P_TEMP, P_LUX_TH, P_TEMP_TH, P_LUX_HYSTERESIS, P_TEMP_HYSTERESIS,
+    P_UP_TIME, P_DOWN_TIME, P_AZ_MIN, P_AZ_MAX, P_COOLDOWN, P_ENABLED,
+    P_WINDOW_OPEN_DELAY, P_WINDOW_CLOSE_DELAY, P_INTERMEDIATE_POS, P_INTERMEDIATE_TIME,
+    P_HEAT_PROTECTION, P_HEAT_PROTECTION_TEMP, P_KEEP_SUNPROTECT, P_BRIGHTNESS_END_DELAY,
+    P_NO_CLOSE_SUMMER,
     P_LIGHT_ENTITY, P_LIGHT_BRIGHTNESS, P_LIGHT_ON_SHADE, P_LIGHT_ON_NIGHT,
 )
 
@@ -47,6 +56,7 @@ class ProfileController:
         self.cfg = cfg
         self.name = cfg.get(P_NAME, "Cover")
         self.cover = cfg.get(P_COVER)
+        self.area = cfg.get(P_AREA, "none")  # Bereichs-Zuordnung
         self.window = cfg.get(P_WINDOW) or None
         self.door = cfg.get(P_DOOR) or None
         self.day_pos = _to_int(cfg.get(P_DAY_POS, 40), 40)
@@ -57,12 +67,25 @@ class ProfileController:
         self.temp_sensor = cfg.get(P_TEMP) or None
         self.lux_th = _to_float(cfg.get(P_LUX_TH, 20000), 20000)
         self.temp_th = _to_float(cfg.get(P_TEMP_TH, 26), 26)
+        self.lux_hysteresis = _to_int(cfg.get(P_LUX_HYSTERESIS, 20), 20)
+        self.temp_hysteresis = _to_int(cfg.get(P_TEMP_HYSTERESIS, 10), 10)
         self.az_min = _to_float(cfg.get(P_AZ_MIN, -360), -360)
         self.az_max = _to_float(cfg.get(P_AZ_MAX, 360), 360)
         self.up_time = cfg.get(P_UP_TIME) or ""
         self.down_time = cfg.get(P_DOWN_TIME) or ""
         self.cooldown = _to_int(cfg.get(P_COOLDOWN, entry.options.get(CONF_DEFAULT_COOLDOWN, 120)), 120)
         self.enabled = bool(cfg.get(P_ENABLED, True))
+        
+        # Erweiterte Features
+        self.window_open_delay = _to_int(cfg.get(P_WINDOW_OPEN_DELAY, 0), 0)
+        self.window_close_delay = _to_int(cfg.get(P_WINDOW_CLOSE_DELAY, 0), 0)
+        self.intermediate_pos = _to_int(cfg.get(P_INTERMEDIATE_POS, 0), 0)
+        self.intermediate_time = cfg.get(P_INTERMEDIATE_TIME) or ""
+        self.heat_protection = bool(cfg.get(P_HEAT_PROTECTION, False))
+        self.heat_protection_temp = _to_float(cfg.get(P_HEAT_PROTECTION_TEMP, 30), 30)
+        self.keep_sunprotect = bool(cfg.get(P_KEEP_SUNPROTECT, False))
+        self.brightness_end_delay = _to_int(cfg.get(P_BRIGHTNESS_END_DELAY, 0), 0)
+        self.no_close_summer = bool(cfg.get(P_NO_CLOSE_SUMMER, False))
         
         # Light automation
         self.light_entity = cfg.get(P_LIGHT_ENTITY) or None
@@ -78,6 +101,11 @@ class ProfileController:
         self._last_action_reason: str = "unknown"
         self._status: str = "inactive"
         self._sensor_update_callbacks: list[CALLBACK_TYPE] = []
+        
+        # Hysterese-Tracking
+        self._last_lux_trigger_active: Optional[bool] = None
+        self._last_temp_trigger_active: Optional[bool] = None
+        self._brightness_end_timer: Optional[CALLBACK_TYPE] = None
 
     async def async_start(self):
         if not self.cover:

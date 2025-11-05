@@ -27,12 +27,73 @@ def _validate_time(val):
     except (ValueError, AttributeError):
         return None
 
+def _validate_date(val):
+    """Validate date format MM-DD."""
+    if not val or val.strip() == "":
+        return None
+    try:
+        parts = val.strip().split("-")
+        if len(parts) != 2:
+            raise ValueError("Invalid format")
+        month = int(parts[0])
+        day = int(parts[1])
+        if not (1 <= month <= 12 and 1 <= day <= 31):
+            raise ValueError("Date out of range")
+        return f"{month:02d}-{day:02d}"
+    except (ValueError, AttributeError):
+        return None
+
 class ShutterPilotConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
         if user_input is not None:
-            return self.async_create_entry(title="ShutterPilot", data=user_input)
+            # Initialize with default areas
+            default_areas = {
+                AREA_LIVING: {
+                    A_NAME: "Wohnbereich",
+                    A_MODE: MODE_SUN,
+                    A_UP_TIME_WEEK: "07:00",
+                    A_DOWN_TIME_WEEK: "22:00",
+                    A_UP_TIME_WEEKEND: "08:00",
+                    A_DOWN_TIME_WEEKEND: "23:00",
+                    A_UP_EARLIEST: "06:00",
+                    A_UP_LATEST: "09:00",
+                    A_STAGGER_DELAY: 10
+                },
+                AREA_SLEEPING: {
+                    A_NAME: "Schlafbereich",
+                    A_MODE: MODE_SUN,
+                    A_UP_TIME_WEEK: "06:00",
+                    A_DOWN_TIME_WEEK: "21:00",
+                    A_UP_TIME_WEEKEND: "08:00",
+                    A_DOWN_TIME_WEEKEND: "22:00",
+                    A_UP_EARLIEST: "05:00",
+                    A_UP_LATEST: "08:00",
+                    A_STAGGER_DELAY: 10
+                },
+                AREA_CHILDREN: {
+                    A_NAME: "Kinderbereich",
+                    A_MODE: MODE_TIME_ONLY,
+                    A_UP_TIME_WEEK: "07:30",
+                    A_DOWN_TIME_WEEK: "20:00",
+                    A_UP_TIME_WEEKEND: "08:30",
+                    A_DOWN_TIME_WEEKEND: "21:00",
+                    A_UP_EARLIEST: "06:30",
+                    A_UP_LATEST: "09:00",
+                    A_STAGGER_DELAY: 10
+                }
+            }
+            data = {
+                **user_input,
+                CONF_AREAS: default_areas,
+                CONF_SUMMER_START: "05-01",
+                CONF_SUMMER_END: "09-30",
+                CONF_SUN_ELEVATION_END: 10,
+                CONF_SUN_OFFSET_UP: 0,
+                CONF_SUN_OFFSET_DOWN: 0
+            }
+            return self.async_create_entry(title="ShutterPilot", data=data)
 
         schema = vol.Schema({
             vol.Required(CONF_GLOBAL_AUTO, default=True): bool,
@@ -49,28 +110,60 @@ class ShutterPilotConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
     def __init__(self, entry):
         self.entry = entry
-        self._profiles: list[dict] = list(entry.options.get(CONF_PROFILES, []))  # mutable copy
+        self._profiles: list[dict] = list(entry.options.get(CONF_PROFILES, []))
+        self._areas: dict = dict(entry.options.get(CONF_AREAS, entry.data.get(CONF_AREAS, {})))
         self._base_opts: dict = {}
         self._edit_index: int | None = None
+        self._edit_area: str | None = None
 
     async def async_step_init(self, user_input=None):
         data = _opt(self.entry)
 
-        # Menü inkl. Aktion
+        # Hauptmenü mit Tabs
         menu = vol.Schema({
             vol.Required(CONF_GLOBAL_AUTO, default=data.get(CONF_GLOBAL_AUTO, True)): bool,
             vol.Required(CONF_DEFAULT_VPOS, default=data.get(CONF_DEFAULT_VPOS, 30)): vol.All(int, vol.Range(min=0, max=80)),
             vol.Required(CONF_DEFAULT_COOLDOWN, default=data.get(CONF_DEFAULT_COOLDOWN, 120)): vol.All(int, vol.Range(min=0, max=900)),
-            vol.Optional("action", default="none"): vol.In(["none", "add_profile", "edit_profile", "remove_profile"]),
+            vol.Required(CONF_SUMMER_START, default=data.get(CONF_SUMMER_START, "05-01")): str,
+            vol.Required(CONF_SUMMER_END, default=data.get(CONF_SUMMER_END, "09-30")): str,
+            vol.Required(CONF_SUN_ELEVATION_END, default=data.get(CONF_SUN_ELEVATION_END, 10)): vol.All(int, vol.Range(min=-10, max=30)),
+            vol.Required(CONF_SUN_OFFSET_UP, default=data.get(CONF_SUN_OFFSET_UP, 0)): vol.All(int, vol.Range(min=-120, max=120)),
+            vol.Required(CONF_SUN_OFFSET_DOWN, default=data.get(CONF_SUN_OFFSET_DOWN, 0)): vol.All(int, vol.Range(min=-120, max=120)),
+            vol.Optional("action", default="none"): vol.In([
+                "none",
+                "manage_areas",
+                "add_profile",
+                "edit_profile",
+                "remove_profile"
+            ]),
         })
 
         if user_input is not None:
+            # Validiere Datumsfelder
+            summer_start = _validate_date(user_input.get(CONF_SUMMER_START))
+            summer_end = _validate_date(user_input.get(CONF_SUMMER_END))
+            
+            if not summer_start or not summer_end:
+                return self.async_show_form(
+                    step_id="init",
+                    data_schema=menu,
+                    errors={"base": "Ungültiges Datumsformat (erwartet: MM-DD)"}
+                )
+
             self._base_opts = {
                 CONF_GLOBAL_AUTO: user_input[CONF_GLOBAL_AUTO],
                 CONF_DEFAULT_VPOS: user_input[CONF_DEFAULT_VPOS],
                 CONF_DEFAULT_COOLDOWN: user_input[CONF_DEFAULT_COOLDOWN],
+                CONF_SUMMER_START: summer_start,
+                CONF_SUMMER_END: summer_end,
+                CONF_SUN_ELEVATION_END: user_input[CONF_SUN_ELEVATION_END],
+                CONF_SUN_OFFSET_UP: user_input[CONF_SUN_OFFSET_UP],
+                CONF_SUN_OFFSET_DOWN: user_input[CONF_SUN_OFFSET_DOWN],
             }
+            
             action = user_input.get("action", "none")
+            if action == "manage_areas":
+                return await self.async_step_manage_areas()
             if action == "add_profile":
                 return await self.async_step_add_profile()
             if action == "remove_profile":
@@ -78,44 +171,165 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             if action == "edit_profile":
                 return await self.async_step_edit_profile_select()
 
-            # Speichern ohne Profil-Aktion
-            return self.async_create_entry(title="", data={**self._base_opts, CONF_PROFILES: self._profiles})
+            # Speichern
+            return self.async_create_entry(
+                title="",
+                data={
+                    **self._base_opts,
+                    CONF_AREAS: self._areas,
+                    CONF_PROFILES: self._profiles
+                }
+            )
 
-        # WICHTIG: kein 'description' mehr verwenden → verursachte 500er
         return self.async_show_form(step_id="init", data_schema=menu)
 
-    # ---------- ADD ----------
-    async def async_step_add_profile(self, user_input=None):
+    # ========== BEREICHS-MANAGEMENT ==========
+    
+    async def async_step_manage_areas(self, user_input=None):
+        """Bereichs-Verwaltung."""
+        area_names = {
+            AREA_LIVING: self._areas.get(AREA_LIVING, {}).get(A_NAME, "Wohnbereich"),
+            AREA_SLEEPING: self._areas.get(AREA_SLEEPING, {}).get(A_NAME, "Schlafbereich"),
+            AREA_CHILDREN: self._areas.get(AREA_CHILDREN, {}).get(A_NAME, "Kinderbereich"),
+        }
+        
+        menu = vol.Schema({
+            vol.Optional("area_action", default="back"): vol.In({
+                "back": "Zurück zum Hauptmenü",
+                AREA_LIVING: f"Bearbeiten: {area_names[AREA_LIVING]}",
+                AREA_SLEEPING: f"Bearbeiten: {area_names[AREA_SLEEPING]}",
+                AREA_CHILDREN: f"Bearbeiten: {area_names[AREA_CHILDREN]}",
+            }),
+        })
+
+        if user_input is not None:
+            action = user_input.get("area_action", "back")
+            if action == "back":
+                return await self.async_step_init()
+            if action in [AREA_LIVING, AREA_SLEEPING, AREA_CHILDREN]:
+                self._edit_area = action
+                return await self.async_step_edit_area()
+
+        return self.async_show_form(step_id="manage_areas", data_schema=menu)
+
+    async def async_step_edit_area(self, user_input=None):
+        """Bereich bearbeiten."""
+        if not self._edit_area:
+            return await self.async_step_manage_areas()
+        
+        current = self._areas.get(self._edit_area, {})
+        
         schema = vol.Schema({
+            vol.Required(A_NAME, default=current.get(A_NAME, "")): str,
+            vol.Required(A_MODE, default=current.get(A_MODE, MODE_SUN)): vol.In({
+                MODE_TIME_ONLY: "Nur Zeit",
+                MODE_SUN: "Zeit mit Sonnenauf-/-untergang",
+                MODE_GOLDEN_HOUR: "Zeit mit Golden Hour",
+            }),
+            vol.Required(A_UP_TIME_WEEK, default=current.get(A_UP_TIME_WEEK, "07:00")): str,
+            vol.Required(A_DOWN_TIME_WEEK, default=current.get(A_DOWN_TIME_WEEK, "22:00")): str,
+            vol.Required(A_UP_TIME_WEEKEND, default=current.get(A_UP_TIME_WEEKEND, "08:00")): str,
+            vol.Required(A_DOWN_TIME_WEEKEND, default=current.get(A_DOWN_TIME_WEEKEND, "23:00")): str,
+            vol.Required(A_UP_EARLIEST, default=current.get(A_UP_EARLIEST, "06:00")): str,
+            vol.Required(A_UP_LATEST, default=current.get(A_UP_LATEST, "09:00")): str,
+            vol.Required(A_STAGGER_DELAY, default=current.get(A_STAGGER_DELAY, 10)): vol.All(int, vol.Range(min=0, max=300)),
+        })
+
+        if user_input is not None:
+            # Validiere Zeitfelder
+            errors = {}
+            for field in [A_UP_TIME_WEEK, A_DOWN_TIME_WEEK, A_UP_TIME_WEEKEND, A_DOWN_TIME_WEEKEND, A_UP_EARLIEST, A_UP_LATEST]:
+                if not _validate_time(user_input.get(field)):
+                    errors[field] = "Ungültiges Zeitformat (erwartet: HH:MM)"
+            
+            if errors:
+                return self.async_show_form(step_id="edit_area", data_schema=schema, errors=errors)
+            
+            # Speichere Bereich
+            self._areas[self._edit_area] = {
+                A_NAME: user_input[A_NAME],
+                A_MODE: user_input[A_MODE],
+                A_UP_TIME_WEEK: _validate_time(user_input[A_UP_TIME_WEEK]),
+                A_DOWN_TIME_WEEK: _validate_time(user_input[A_DOWN_TIME_WEEK]),
+                A_UP_TIME_WEEKEND: _validate_time(user_input[A_UP_TIME_WEEKEND]),
+                A_DOWN_TIME_WEEKEND: _validate_time(user_input[A_DOWN_TIME_WEEKEND]),
+                A_UP_EARLIEST: _validate_time(user_input[A_UP_EARLIEST]),
+                A_UP_LATEST: _validate_time(user_input[A_UP_LATEST]),
+                A_STAGGER_DELAY: user_input[A_STAGGER_DELAY],
+            }
+            return await self.async_step_manage_areas()
+
+        return self.async_show_form(step_id="edit_area", data_schema=schema)
+
+    # ========== PROFIL-MANAGEMENT (ERWEITERT) ==========
+    
+    async def async_step_add_profile(self, user_input=None):
+        """Profil hinzufügen mit allen neuen Feldern."""
+        area_choices = {
+            "none": "Keinem Bereich zuordnen",
+            AREA_LIVING: self._areas.get(AREA_LIVING, {}).get(A_NAME, "Wohnbereich"),
+            AREA_SLEEPING: self._areas.get(AREA_SLEEPING, {}).get(A_NAME, "Schlafbereich"),
+            AREA_CHILDREN: self._areas.get(AREA_CHILDREN, {}).get(A_NAME, "Kinderbereich"),
+        }
+        
+        schema = vol.Schema({
+            # Basis
             vol.Required(P_NAME): str,
             vol.Required(P_COVER): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="cover")
             ),
+            vol.Optional(P_AREA, default="none"): vol.In(area_choices),
+            
+            # Sensoren
             vol.Optional(P_WINDOW): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor")
             ),
             vol.Optional(P_DOOR): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor")
             ),
-            vol.Required(P_DAY_POS, default=40): vol.All(int, vol.Range(min=0, max=100)),
-            vol.Required(P_NIGHT_POS, default=0): vol.All(int, vol.Range(min=0, max=100)),
-            vol.Required(P_VPOS, default=self._base_opts.get(CONF_DEFAULT_VPOS, 30)): vol.All(int, vol.Range(min=0, max=80)),
-            vol.Required(P_DOOR_SAFE, default=30): vol.All(int, vol.Range(min=0, max=80)),
             vol.Optional(P_LUX): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="sensor", device_class="illuminance")
             ),
             vol.Optional(P_TEMP): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
             ),
+            
+            # Positionen
+            vol.Required(P_DAY_POS, default=40): vol.All(int, vol.Range(min=0, max=100)),
+            vol.Required(P_NIGHT_POS, default=0): vol.All(int, vol.Range(min=0, max=100)),
+            vol.Required(P_VPOS, default=self._base_opts.get(CONF_DEFAULT_VPOS, 30)): vol.All(int, vol.Range(min=0, max=80)),
+            vol.Required(P_DOOR_SAFE, default=30): vol.All(int, vol.Range(min=0, max=80)),
+            
+            # Schwellwerte & Hysterese
             vol.Optional(P_LUX_TH, default=20000): vol.Coerce(float),
+            vol.Optional(P_LUX_HYSTERESIS, default=20): vol.All(int, vol.Range(min=0, max=100)),
             vol.Optional(P_TEMP_TH, default=26): vol.Coerce(float),
+            vol.Optional(P_TEMP_HYSTERESIS, default=10): vol.All(int, vol.Range(min=0, max=100)),
+            
+            # Sonnenposition
             vol.Optional(P_AZ_MIN, default=-360): vol.Coerce(float),
             vol.Optional(P_AZ_MAX, default=360): vol.Coerce(float),
-            vol.Optional(P_UP_TIME, default=""): str,     # "HH:MM"
-            vol.Optional(P_DOWN_TIME, default=""): str,   # "HH:MM"
+            
+            # Zeiten (überschreibt Bereich)
+            vol.Optional(P_UP_TIME, default=""): str,
+            vol.Optional(P_DOWN_TIME, default=""): str,
+            
+            # Erweiterte Features
+            vol.Optional(P_WINDOW_OPEN_DELAY, default=0): vol.All(int, vol.Range(min=0, max=300)),
+            vol.Optional(P_WINDOW_CLOSE_DELAY, default=0): vol.All(int, vol.Range(min=0, max=300)),
+            vol.Optional(P_INTERMEDIATE_POS, default=0): vol.All(int, vol.Range(min=0, max=100)),
+            vol.Optional(P_INTERMEDIATE_TIME, default=""): str,
+            vol.Optional(P_HEAT_PROTECTION, default=False): bool,
+            vol.Optional(P_HEAT_PROTECTION_TEMP, default=30): vol.Coerce(float),
+            vol.Optional(P_KEEP_SUNPROTECT, default=False): bool,
+            vol.Optional(P_BRIGHTNESS_END_DELAY, default=0): vol.All(int, vol.Range(min=0, max=60)),
+            vol.Optional(P_NO_CLOSE_SUMMER, default=False): bool,
+            
+            # Cooldown & Status
             vol.Optional(P_COOLDOWN, default=self._base_opts.get(CONF_DEFAULT_COOLDOWN, 120)): vol.All(int, vol.Range(min=0, max=1800)),
             vol.Optional(P_ENABLED, default=True): bool,
-            # Light automation
+            
+            # Licht-Automation
             vol.Optional(P_LIGHT_ENTITY): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="light")
             ),
@@ -123,13 +337,14 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(P_LIGHT_ON_SHADE, default=True): bool,
             vol.Optional(P_LIGHT_ON_NIGHT, default=True): bool,
         })
+        
         if user_input is not None:
             prof = dict(user_input)
-            # normalize empties -> None
+            # Normalisiere leere Felder
             for k in (P_WINDOW, P_DOOR, P_LUX, P_TEMP, P_LIGHT_ENTITY):
                 prof[k] = _norm_empty(prof.get(k))
-            # validate and normalize time fields
-            for k in (P_UP_TIME, P_DOWN_TIME):
+            # Validiere Zeitfelder
+            for k in (P_UP_TIME, P_DOWN_TIME, P_INTERMEDIATE_TIME):
                 val = prof.get(k)
                 if val:
                     normalized = _validate_time(val)
@@ -144,9 +359,9 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
                     prof[k] = None
             self._profiles.append(prof)
             return await self.async_step_init()
+        
         return self.async_show_form(step_id="add_profile", data_schema=schema)
 
-    # ---------- REMOVE ----------
     async def async_step_remove_profile_select(self, user_input=None):
         if not self._profiles:
             return await self.async_step_init()
@@ -158,7 +373,6 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_init()
         return self.async_show_form(step_id="remove_profile_select", data_schema=schema)
 
-    # ---------- EDIT ----------
     async def async_step_edit_profile_select(self, user_input=None):
         if not self._profiles:
             return await self.async_step_init()
@@ -175,36 +389,71 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_init()
         cur = self._profiles[idx]
 
+        area_choices = {
+            "none": "Keinem Bereich zuordnen",
+            AREA_LIVING: self._areas.get(AREA_LIVING, {}).get(A_NAME, "Wohnbereich"),
+            AREA_SLEEPING: self._areas.get(AREA_SLEEPING, {}).get(A_NAME, "Schlafbereich"),
+            AREA_CHILDREN: self._areas.get(AREA_CHILDREN, {}).get(A_NAME, "Kinderbereich"),
+        }
+
         schema = vol.Schema({
+            # Basis
             vol.Required(P_NAME, default=cur.get(P_NAME, "")): str,
             vol.Required(P_COVER, default=cur.get(P_COVER, "")): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="cover")
             ),
+            vol.Optional(P_AREA, default=cur.get(P_AREA, "none")): vol.In(area_choices),
+            
+            # Sensoren
             vol.Optional(P_WINDOW, default=cur.get(P_WINDOW)): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor")
             ),
             vol.Optional(P_DOOR, default=cur.get(P_DOOR)): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor")
             ),
-            vol.Required(P_DAY_POS, default=cur.get(P_DAY_POS, 40)): vol.All(int, vol.Range(min=0, max=100)),
-            vol.Required(P_NIGHT_POS, default=cur.get(P_NIGHT_POS, 0)): vol.All(int, vol.Range(min=0, max=100)),
-            vol.Required(P_VPOS, default=cur.get(P_VPOS, self._base_opts.get(CONF_DEFAULT_VPOS, 30))): vol.All(int, vol.Range(min=0, max=80)),
-            vol.Required(P_DOOR_SAFE, default=cur.get(P_DOOR_SAFE, 30)): vol.All(int, vol.Range(min=0, max=80)),
             vol.Optional(P_LUX, default=cur.get(P_LUX)): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="sensor", device_class="illuminance")
             ),
             vol.Optional(P_TEMP, default=cur.get(P_TEMP)): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
             ),
+            
+            # Positionen
+            vol.Required(P_DAY_POS, default=cur.get(P_DAY_POS, 40)): vol.All(int, vol.Range(min=0, max=100)),
+            vol.Required(P_NIGHT_POS, default=cur.get(P_NIGHT_POS, 0)): vol.All(int, vol.Range(min=0, max=100)),
+            vol.Required(P_VPOS, default=cur.get(P_VPOS, self._base_opts.get(CONF_DEFAULT_VPOS, 30))): vol.All(int, vol.Range(min=0, max=80)),
+            vol.Required(P_DOOR_SAFE, default=cur.get(P_DOOR_SAFE, 30)): vol.All(int, vol.Range(min=0, max=80)),
+            
+            # Schwellwerte & Hysterese
             vol.Optional(P_LUX_TH, default=cur.get(P_LUX_TH, 20000)): vol.Coerce(float),
+            vol.Optional(P_LUX_HYSTERESIS, default=cur.get(P_LUX_HYSTERESIS, 20)): vol.All(int, vol.Range(min=0, max=100)),
             vol.Optional(P_TEMP_TH, default=cur.get(P_TEMP_TH, 26)): vol.Coerce(float),
+            vol.Optional(P_TEMP_HYSTERESIS, default=cur.get(P_TEMP_HYSTERESIS, 10)): vol.All(int, vol.Range(min=0, max=100)),
+            
+            # Sonnenposition
             vol.Optional(P_AZ_MIN, default=cur.get(P_AZ_MIN, -360)): vol.Coerce(float),
             vol.Optional(P_AZ_MAX, default=cur.get(P_AZ_MAX, 360)): vol.Coerce(float),
+            
+            # Zeiten
             vol.Optional(P_UP_TIME, default=cur.get(P_UP_TIME) or ""): str,
             vol.Optional(P_DOWN_TIME, default=cur.get(P_DOWN_TIME) or ""): str,
+            
+            # Erweiterte Features
+            vol.Optional(P_WINDOW_OPEN_DELAY, default=cur.get(P_WINDOW_OPEN_DELAY, 0)): vol.All(int, vol.Range(min=0, max=300)),
+            vol.Optional(P_WINDOW_CLOSE_DELAY, default=cur.get(P_WINDOW_CLOSE_DELAY, 0)): vol.All(int, vol.Range(min=0, max=300)),
+            vol.Optional(P_INTERMEDIATE_POS, default=cur.get(P_INTERMEDIATE_POS, 0)): vol.All(int, vol.Range(min=0, max=100)),
+            vol.Optional(P_INTERMEDIATE_TIME, default=cur.get(P_INTERMEDIATE_TIME) or ""): str,
+            vol.Optional(P_HEAT_PROTECTION, default=bool(cur.get(P_HEAT_PROTECTION, False))): bool,
+            vol.Optional(P_HEAT_PROTECTION_TEMP, default=cur.get(P_HEAT_PROTECTION_TEMP, 30)): vol.Coerce(float),
+            vol.Optional(P_KEEP_SUNPROTECT, default=bool(cur.get(P_KEEP_SUNPROTECT, False))): bool,
+            vol.Optional(P_BRIGHTNESS_END_DELAY, default=cur.get(P_BRIGHTNESS_END_DELAY, 0)): vol.All(int, vol.Range(min=0, max=60)),
+            vol.Optional(P_NO_CLOSE_SUMMER, default=bool(cur.get(P_NO_CLOSE_SUMMER, False))): bool,
+            
+            # Cooldown & Status
             vol.Optional(P_COOLDOWN, default=cur.get(P_COOLDOWN, self._base_opts.get(CONF_DEFAULT_COOLDOWN, 120))): vol.All(int, vol.Range(min=0, max=1800)),
             vol.Optional(P_ENABLED, default=bool(cur.get(P_ENABLED, True))): bool,
-            # Light automation
+            
+            # Licht-Automation
             vol.Optional(P_LIGHT_ENTITY, default=cur.get(P_LIGHT_ENTITY)): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="light")
             ),
@@ -212,13 +461,14 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(P_LIGHT_ON_SHADE, default=bool(cur.get(P_LIGHT_ON_SHADE, True))): bool,
             vol.Optional(P_LIGHT_ON_NIGHT, default=bool(cur.get(P_LIGHT_ON_NIGHT, True))): bool,
         })
+        
         if user_input is not None:
             newp = dict(user_input)
-            # normalize empties -> None
+            # Normalisiere leere Felder
             for k in (P_WINDOW, P_DOOR, P_LUX, P_TEMP, P_LIGHT_ENTITY):
                 newp[k] = _norm_empty(newp.get(k))
-            # validate and normalize time fields
-            for k in (P_UP_TIME, P_DOWN_TIME):
+            # Validiere Zeitfelder
+            for k in (P_UP_TIME, P_DOWN_TIME, P_INTERMEDIATE_TIME):
                 val = newp.get(k)
                 if val:
                     normalized = _validate_time(val)
@@ -232,6 +482,6 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
                 else:
                     newp[k] = None
             self._profiles[idx] = newp
-            # zurück ins Hauptmenü
             return await self.async_step_init()
+        
         return self.async_show_form(step_id="edit_profile_form", data_schema=schema)

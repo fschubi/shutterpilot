@@ -19,19 +19,62 @@
   "options": {
     "step": {
       "init": {
-        "title": "ShutterPilot Optionen",
-        "description": "Globale Einstellungen und Profilverwaltung",
+        "title": "ShutterPilot - Haupteinstellungen",
+        "description": "Globale Einstellungen, Bereiche und Profilverwaltung",
         "data": {
           "global_auto": "Automatik global aktiv",
           "default_ventilation_position": "Standard Lüftungsposition (%)",
           "default_cooldown": "Standard Cooldown (Sek.)",
+          "summer_start": "Sommer-Beginn (MM-DD)",
+          "summer_end": "Sommer-Ende (MM-DD)",
+          "sun_elevation_end": "Sonnenhöhe Beschattungsende (Grad)",
+          "sun_offset_up": "Offset Hochfahren (Minuten)",
+          "sun_offset_down": "Offset Runterfahren (Minuten)",
           "action": "Aktion"
         },
         "data_description": {
           "global_auto": "Aktiviert die automatische Steuerung aller Rollläden",
           "default_ventilation_position": "Standardposition für die Lüftung bei geöffneten Fenstern (0-80%)",
           "default_cooldown": "Wartezeit nach Fensterschließung (0-900 Sekunden)",
-          "action": "Wählen Sie eine Profil-Aktion aus"
+          "summer_start": "Beginn des Sommerzeitraums (Format: MM-DD, z.B. 05-01)",
+          "summer_end": "Ende des Sommerzeitraums (Format: MM-DD, z.B. 09-30)",
+          "sun_elevation_end": "Sonnenhöhe unter der die Beschattung endet (-10 bis 30 Grad)",
+          "sun_offset_up": "Zeitversatz für Sonnenaufgang in Minuten (-120 bis +120)",
+          "sun_offset_down": "Zeitversatz für Sonnenuntergang in Minuten (-120 bis +120)",
+          "action": "Wählen Sie eine Aktion aus"
+        }
+      },
+      "manage_areas": {
+        "title": "Bereiche verwalten",
+        "description": "Wohn-, Schlaf- und Kinderbereich konfigurieren",
+        "data": {
+          "area_action": "Bereich"
+        }
+      },
+      "edit_area": {
+        "title": "Bereich bearbeiten",
+        "description": "Zeit-Einstellungen für diesen Bereich",
+        "data": {
+          "area_name": "Bereichsname",
+          "area_mode": "Steuerungsart",
+          "up_time_weekday": "Hochfahrzeit Wochentag (HH:MM)",
+          "down_time_weekday": "Runterfahrzeit Wochentag (HH:MM)",
+          "up_time_weekend": "Hochfahrzeit Wochenende (HH:MM)",
+          "down_time_weekend": "Runterfahrzeit Wochenende (HH:MM)",
+          "up_earliest": "Früheste Hochfahrzeit (HH:MM)",
+          "up_latest": "Späteste Hochfahrzeit (HH:MM)",
+          "stagger_delay": "Verzögerung zwischen Rollläden (Sekunden)"
+        },
+        "data_description": {
+          "area_name": "Name für diesen Bereich",
+          "area_mode": "Art der Zeitsteuerung für Rollläden in diesem Bereich",
+          "up_time_weekday": "Zeit zum Hochfahren während der Woche",
+          "down_time_weekday": "Zeit zum Runterfahren während der Woche",
+          "up_time_weekend": "Zeit zum Hochfahren am Wochenende",
+          "down_time_weekend": "Zeit zum Runterfahren am Wochenende",
+          "up_earliest": "Rollläden fahren frühestens zu dieser Zeit hoch",
+          "up_latest": "Rollläden fahren spätestens zu dieser Zeit hoch",
+          "stagger_delay": "Zeitverzögerung zwischen einzelnen Rollladenfahrten zur Vermeidung von Funkstörungen"
         }
       },
       "add_profile": {
@@ -40,20 +83,32 @@
         "data": {
           "name": "Profilname",
           "cover_entity_id": "Rolllade (Cover)",
+          "area": "Bereich zuordnen",
           "window_sensor": "Fenstersensor (optional)",
           "door_sensor": "Türsensor (optional)",
+          "lux_sensor": "Helligkeitssensor (optional)",
+          "temp_sensor": "Temperatursensor (optional)",
           "day_position": "Tagesposition (%)",
           "night_position": "Nachtposition (%)",
           "vent_position": "Lüftungsposition (%)",
           "door_safe_position": "Sichere Position bei offener Tür (%)",
-          "lux_sensor": "Helligkeitssensor (optional)",
-          "temp_sensor": "Temperatursensor (optional)",
           "lux_threshold": "Helligkeits-Schwellwert (lx)",
+          "lux_hysteresis": "Helligkeits-Hysterese (%)",
           "temp_threshold": "Temperatur-Schwellwert (°C)",
+          "temp_hysteresis": "Temperatur-Hysterese (%)",
           "azimuth_min": "Azimut Minimum (°)",
           "azimuth_max": "Azimut Maximum (°)",
           "up_time": "Hochfahrzeit (HH:MM, optional)",
           "down_time": "Runterfahrzeit (HH:MM, optional)",
+          "window_open_delay": "Verzögerung Fenster öffnen (Sek.)",
+          "window_close_delay": "Verzögerung Fenster schließen (Sek.)",
+          "intermediate_position": "Zwischenposition (%)",
+          "intermediate_time": "Zeit für Zwischenposition (HH:MM)",
+          "heat_protection_enabled": "Wärmeschutz aktivieren",
+          "heat_protection_temp": "Wärmeschutz-Temperatur (°C)",
+          "keep_in_sunprotect": "Im Sonnenschutz halten",
+          "brightness_end_delay": "Helligkeits-Ende Verzögerung (Min.)",
+          "no_close_in_summer": "Im Sommer nicht schließen",
           "cooldown_sec": "Cooldown (Sekunden)",
           "enabled": "Profil aktiviert",
           "light_entity": "Licht-Entität (optional)",
@@ -64,20 +119,32 @@
         "data_description": {
           "name": "Eindeutiger Name für dieses Profil",
           "cover_entity_id": "Die zu steuernde Rolllade",
+          "area": "Ordnet das Profil einem Bereich zu (übernimmt dessen Zeit-Einstellungen)",
           "window_sensor": "Fenstersensor zur Überwachung des Fensterstatus",
           "door_sensor": "Türsensor zur Überwachung des Türstatus",
+          "lux_sensor": "Sensor zur Messung der Helligkeit (für Beschattungsautomatik)",
+          "temp_sensor": "Sensor zur Messung der Temperatur (für Beschattungsautomatik)",
           "day_position": "Rollladenposition tagsüber (0-100%)",
           "night_position": "Rollladenposition nachts/bei Sonnenuntergang (0-100%)",
           "vent_position": "Position bei geöffnetem Fenster (0-80%)",
           "door_safe_position": "Position bei offener Tür für Durchgang (0-80%)",
-          "lux_sensor": "Sensor zur Messung der Helligkeit (für Beschattungsautomatik)",
-          "temp_sensor": "Sensor zur Messung der Temperatur (für Beschattungsautomatik)",
           "lux_threshold": "Helligkeitswert ab dem beschattet wird (z.B. 20000 lx)",
+          "lux_hysteresis": "Hysterese in % zur Vermeidung von Flackern (0-100%)",
           "temp_threshold": "Temperatur ab der beschattet wird (z.B. 26°C)",
+          "temp_hysteresis": "Hysterese in % zur Vermeidung von Flackern (0-100%)",
           "azimuth_min": "Minimaler Sonnenwinkel für Beschattung (-360° bis 360°)",
           "azimuth_max": "Maximaler Sonnenwinkel für Beschattung (-360° bis 360°)",
-          "up_time": "Feste Zeit zum Hochfahren (Format: HH:MM, z.B. 07:00)",
-          "down_time": "Feste Zeit zum Runterfahren (Format: HH:MM, z.B. 22:00)",
+          "up_time": "Feste Zeit zum Hochfahren (Format: HH:MM) - überschreibt Bereichszeit",
+          "down_time": "Feste Zeit zum Runterfahren (Format: HH:MM) - überschreibt Bereichszeit",
+          "window_open_delay": "Verzögerung in Sekunden bevor Rollladen beim Fensteröffnen fährt",
+          "window_close_delay": "Verzögerung in Sekunden bevor Rollladen beim Fensterschließen fährt",
+          "intermediate_position": "Zwischenposition für späteres vollständiges Schließen (z.B. für Weihnachten)",
+          "intermediate_time": "Zeit zu der in Zwischenposition gefahren wird",
+          "heat_protection_enabled": "Bei extremer Hitze vollständig schließen",
+          "heat_protection_temp": "Temperatur ab der Wärmeschutz greift",
+          "keep_in_sunprotect": "Rollladen im Sonnenschutz halten bis zum Abend",
+          "brightness_end_delay": "Verzögerung in Minuten nach Helligkeits-Unterschreitung",
+          "no_close_in_summer": "Rollladen im Sommer nicht schließen (verwendet Sommerzeitraum aus Haupteinstellungen)",
           "cooldown_sec": "Wartezeit nach manuellen Änderungen (0-1800 Sekunden)",
           "enabled": "Profil ist aktiv und wird ausgeführt",
           "light_entity": "Licht, das bei Rollladenbewegung gesteuert wird",
@@ -99,50 +166,38 @@
         "data": {
           "name": "Profilname",
           "cover_entity_id": "Rolllade (Cover)",
+          "area": "Bereich zuordnen",
           "window_sensor": "Fenstersensor (optional)",
           "door_sensor": "Türsensor (optional)",
+          "lux_sensor": "Helligkeitssensor (optional)",
+          "temp_sensor": "Temperatursensor (optional)",
           "day_position": "Tagesposition (%)",
           "night_position": "Nachtposition (%)",
           "vent_position": "Lüftungsposition (%)",
           "door_safe_position": "Sichere Position bei offener Tür (%)",
-          "lux_sensor": "Helligkeitssensor (optional)",
-          "temp_sensor": "Temperatursensor (optional)",
           "lux_threshold": "Helligkeits-Schwellwert (lx)",
+          "lux_hysteresis": "Helligkeits-Hysterese (%)",
           "temp_threshold": "Temperatur-Schwellwert (°C)",
+          "temp_hysteresis": "Temperatur-Hysterese (%)",
           "azimuth_min": "Azimut Minimum (°)",
           "azimuth_max": "Azimut Maximum (°)",
           "up_time": "Hochfahrzeit (HH:MM, optional)",
           "down_time": "Runterfahrzeit (HH:MM, optional)",
+          "window_open_delay": "Verzögerung Fenster öffnen (Sek.)",
+          "window_close_delay": "Verzögerung Fenster schließen (Sek.)",
+          "intermediate_position": "Zwischenposition (%)",
+          "intermediate_time": "Zeit für Zwischenposition (HH:MM)",
+          "heat_protection_enabled": "Wärmeschutz aktivieren",
+          "heat_protection_temp": "Wärmeschutz-Temperatur (°C)",
+          "keep_in_sunprotect": "Im Sonnenschutz halten",
+          "brightness_end_delay": "Helligkeits-Ende Verzögerung (Min.)",
+          "no_close_in_summer": "Im Sommer nicht schließen",
           "cooldown_sec": "Cooldown (Sekunden)",
           "enabled": "Profil aktiviert",
           "light_entity": "Licht-Entität (optional)",
           "light_brightness": "Lichthelligkeit (%)",
           "light_on_shade": "Licht bei Beschattung einschalten",
           "light_on_night": "Licht bei Nachtmodus einschalten"
-        },
-        "data_description": {
-          "name": "Eindeutiger Name für dieses Profil",
-          "cover_entity_id": "Die zu steuernde Rolllade",
-          "window_sensor": "Fenstersensor zur Überwachung des Fensterstatus",
-          "door_sensor": "Türsensor zur Überwachung des Türstatus",
-          "day_position": "Rollladenposition tagsüber (0-100%)",
-          "night_position": "Rollladenposition nachts/bei Sonnenuntergang (0-100%)",
-          "vent_position": "Position bei geöffnetem Fenster (0-80%)",
-          "door_safe_position": "Position bei offener Tür für Durchgang (0-80%)",
-          "lux_sensor": "Sensor zur Messung der Helligkeit (für Beschattungsautomatik)",
-          "temp_sensor": "Sensor zur Messung der Temperatur (für Beschattungsautomatik)",
-          "lux_threshold": "Helligkeitswert ab dem beschattet wird (z.B. 20000 lx)",
-          "temp_threshold": "Temperatur ab der beschattet wird (z.B. 26°C)",
-          "azimuth_min": "Minimaler Sonnenwinkel für Beschattung (-360° bis 360°)",
-          "azimuth_max": "Maximaler Sonnenwinkel für Beschattung (-360° bis 360°)",
-          "up_time": "Feste Zeit zum Hochfahren (Format: HH:MM, z.B. 07:00)",
-          "down_time": "Feste Zeit zum Runterfahren (Format: HH:MM, z.B. 22:00)",
-          "cooldown_sec": "Wartezeit nach manuellen Änderungen (0-1800 Sekunden)",
-          "enabled": "Profil ist aktiv und wird ausgeführt",
-          "light_entity": "Licht, das bei Rollladenbewegung gesteuert wird",
-          "light_brightness": "Helligkeit des Lichts beim Einschalten (0-100%)",
-          "light_on_shade": "Licht beim Beschatten einschalten",
-          "light_on_night": "Licht im Nachtmodus einschalten"
         }
       },
       "remove_profile_select": {
@@ -154,16 +209,33 @@
       }
     },
     "error": {
-      "invalid_time_format": "Ungültiges Zeitformat (erwartet: HH:MM)"
+      "invalid_time_format": "Ungültiges Zeitformat (erwartet: HH:MM)",
+      "base": "Ungültiges Datumsformat (erwartet: MM-DD)"
     }
   },
   "selector": {
     "action": {
       "options": {
         "none": "Keine Aktion (nur speichern)",
+        "manage_areas": "Bereiche verwalten",
         "add_profile": "Neues Profil hinzufügen",
         "edit_profile": "Profil bearbeiten",
         "remove_profile": "Profil löschen"
+      }
+    },
+    "area": {
+      "options": {
+        "none": "Keinem Bereich zuordnen",
+        "living": "Wohnbereich",
+        "sleeping": "Schlafbereich",
+        "children": "Kinderbereich"
+      }
+    },
+    "area_mode": {
+      "options": {
+        "time_only": "Nur Zeit",
+        "sun": "Zeit mit Sonnenauf-/-untergang",
+        "golden_hour": "Zeit mit Golden Hour"
       }
     }
   },
