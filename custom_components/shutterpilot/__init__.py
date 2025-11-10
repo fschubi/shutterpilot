@@ -51,6 +51,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def _update_config(call: ServiceCall):
         """Update config entry options (for card usage)."""
+        import asyncio
+        
         profiles = call.data.get("profiles", [])
         areas = call.data.get("areas", {})
         
@@ -69,15 +71,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Update config entry
         hass.config_entries.async_update_entry(entry, options=new_options)
-        _LOGGER.info("Config entry updated successfully")
+        _LOGGER.info("Config entry updated, triggering reload...")
         
-        # Schedule reload asynchronously (after service call completes)
-        async def _delayed_reload():
-            _LOGGER.info("Triggering integration reload...")
-            await hass.config_entries.async_reload(entry.entry_id)
-            _LOGGER.info("Integration reloaded successfully")
+        # Give event loop a moment to process the update
+        await asyncio.sleep(0.01)
         
-        hass.async_create_task(_delayed_reload())
+        # Reload integration to apply changes
+        await hass.config_entries.async_reload(entry.entry_id)
+        _LOGGER.info("Integration reloaded successfully")
 
     hass.services.async_register(DOMAIN, "all_up", _all_up)
     hass.services.async_register(DOMAIN, "all_down", _all_down)

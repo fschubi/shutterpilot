@@ -1,7 +1,7 @@
 /**
  * ShutterPilot Management Card
  * Professional Enterprise-Level UI for ShutterPilot
- * Version: 2.3.0 - Async Reload + Config Polling
+ * Version: 2.4.0 - Fixed Profile Save (All Tabs)
  */
 
 class ShutterPilotCard extends HTMLElement {
@@ -1057,36 +1057,24 @@ class ShutterPilotCard extends HTMLElement {
   }
 
   async _saveProfile() {
-    const form = this.shadowRoot.querySelector('#profile-form');
-    if (!form) return;
-
-    const formData = new FormData(form);
-    const profile = {};
-
-    // Text inputs
-    ['name', 'cover', 'area', 'window_sensor', 'door_sensor', 'lux_sensor', 'temp_sensor', 'intermediate_time'].forEach(field => {
-      const value = formData.get(field);
-      profile[field] = value === '' ? null : value;
-    });
-
-    // Number inputs
-    ['day_pos', 'night_pos', 'vent_pos', 'door_safe', 'cooldown', 'lux_th', 'lux_hysteresis', 
-     'temp_th', 'temp_hysteresis', 'az_min', 'az_max', 'shade_pos', 'window_open_delay', 
-     'window_close_delay', 'heat_protection_temp', 'intermediate_pos', 'brightness_end_delay'].forEach(field => {
-      const value = formData.get(field);
-      profile[field] = value ? parseFloat(value) : 0;
-    });
-
-    // Checkboxes
-    ['enabled', 'heat_protection', 'no_close_summer', 'keep_sunprotect'].forEach(field => {
-      profile[field] = formData.get(field) === 'on';
-    });
-
+    // Sammle zuerst aktuelle Formular-Daten vom sichtbaren Tab
+    this._saveCurrentProfileFormData();
+    
+    // Verwende die gesammelten Daten (alle Tabs!)
+    if (!this._tempProfileData) {
+      alert('Keine Profil-Daten vorhanden!');
+      return;
+    }
+    
+    const profile = { ...this._tempProfileData };
+    
     // Validation
     if (!profile.name || !profile.cover) {
       alert('Bitte fülle mindestens Name und Cover Entity aus!');
       return;
     }
+    
+    console.log('💾 Speichere Profil:', profile);
 
     // Save
     const index = this._editingProfile.index;
@@ -2102,7 +2090,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c  SHUTTERPILOT-CARD  \n%c  Version 2.3.0 - Async Reload + Config Polling ',
+  '%c  SHUTTERPILOT-CARD  \n%c  Version 2.4.0 - Profile Save with All Tabs ',
   'color: white; background: #1a73e8; font-weight: 700;',
   'color: #1a73e8; font-weight: 300;'
 );
