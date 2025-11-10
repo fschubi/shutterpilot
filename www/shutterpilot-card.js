@@ -1,7 +1,7 @@
 /**
  * ShutterPilot Management Card
  * Professional Enterprise-Level UI for ShutterPilot
- * Version: 2.2.1 - Fixed Save to Backend
+ * Version: 2.3.0 - Async Reload + Config Polling
  */
 
 class ShutterPilotCard extends HTMLElement {
@@ -1145,23 +1145,45 @@ class ShutterPilotCard extends HTMLElement {
         areas: Object.keys(this._areas).length
       });
 
-      // Nutze den update_config Service (triggert automatisch Integration-Reload)
+      // Nutze den update_config Service (triggert asynchron Integration-Reload)
       await this._hass.callService('shutterpilot', 'update_config', {
         profiles: cleanProfiles,
         areas: this._areas,
       });
 
-      console.log('✅ Service-Call erfolgreich, Integration lädt neu...');
-
+      console.log('✅ Service-Call erfolgreich!');
       this._showToast('Konfiguration gespeichert', 'success');
 
-      // Warte auf Integration-Reload (ca. 2-3 Sekunden), dann Config neu laden
-      setTimeout(async () => {
-        console.log('🔄 Lade Config neu nach Integration-Reload...');
+      // Warte auf Integration-Reload und poll Config-Sensor bis neue Daten da sind
+      console.log('🔄 Warte auf Integration-Reload...');
+      
+      let attempts = 0;
+      const maxAttempts = 10;
+      const checkInterval = 500; // Check alle 500ms
+      
+      const pollConfig = async () => {
+        attempts++;
         await this._loadConfigEntry();
-        this.render();
-        console.log('✅ Config erfolgreich neu geladen');
-      }, 2500);
+        
+        // Prüfe ob neue Profile geladen wurden
+        const currentProfileCount = this._profiles.length;
+        console.log(`🔄 Versuch ${attempts}/${maxAttempts}: ${currentProfileCount} Profile geladen`);
+        
+        if (currentProfileCount === cleanProfiles.length || attempts >= maxAttempts) {
+          this.render();
+          if (currentProfileCount === cleanProfiles.length) {
+            console.log('✅ Alle Profile erfolgreich geladen!');
+          } else {
+            console.warn('⚠️ Timeout: Nicht alle Profile geladen');
+          }
+        } else {
+          // Versuche erneut
+          setTimeout(pollConfig, checkInterval);
+        }
+      };
+      
+      // Starte nach 1 Sekunde (gibt Integration Zeit zum Reload)
+      setTimeout(pollConfig, 1000);
 
     } catch (err) {
       console.error('Fehler beim Speichern:', err);
@@ -2080,7 +2102,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c  SHUTTERPILOT-CARD  \n%c  Version 2.2.1 - Save to Backend Fixed ',
+  '%c  SHUTTERPILOT-CARD  \n%c  Version 2.3.0 - Async Reload + Config Polling ',
   'color: white; background: #1a73e8; font-weight: 700;',
   'color: #1a73e8; font-weight: 300;'
 );
