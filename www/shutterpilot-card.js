@@ -1,7 +1,7 @@
 /**
  * ShutterPilot Management Card
  * Professional Enterprise-Level UI for ShutterPilot
- * Version: 2.0.1 - Dark Mode + Full In-Card Configuration
+ * Version: 2.2.1 - Fixed Save to Backend
  */
 
 class ShutterPilotCard extends HTMLElement {
@@ -19,6 +19,7 @@ class ShutterPilotCard extends HTMLElement {
     this._editDialogTab = 'basic';
     this._activeTab = 'profiles';
     this._selectedProfiles = new Set();
+    this._tempProfileData = null;  // Zwischenspeicher für Profil-Bearbeitung
   }
 
   setConfig(config) {
@@ -444,9 +445,12 @@ class ShutterPilotCard extends HTMLElement {
   }
 
   _renderProfileEditDialog() {
-    const profile = this._editingProfile?.index >= 0 ? 
+    // Verwende temporäre Daten falls vorhanden, sonst Original-Profil
+    const originalProfile = this._editingProfile?.index >= 0 ? 
       this._profiles[this._editingProfile.index] : 
       this._getEmptyProfile();
+    
+    const profile = this._tempProfileData || originalProfile;
     
     const isNew = this._editingProfile?.index === -1;
     const title = isNew ? 'Neues Profil erstellen' : `Profil bearbeiten: ${profile.name}`;
@@ -939,6 +943,9 @@ class ShutterPilotCard extends HTMLElement {
 
     root.querySelectorAll('[data-dialog-tab]').forEach(tab => {
       tab.addEventListener('click', (e) => {
+        // Speichere aktuelle Formular-Daten vor Tab-Wechsel
+        this._saveCurrentProfileFormData();
+        
         this._editDialogTab = e.currentTarget.getAttribute('data-dialog-tab');
         this.render();
       });
@@ -967,12 +974,14 @@ class ShutterPilotCard extends HTMLElement {
   _addProfile() {
     this._editingProfile = { index: -1 };
     this._editDialogTab = 'basic';
+    this._tempProfileData = null;  // Reset temporäre Daten
     this.render();
   }
 
   _editProfile(index) {
     this._editingProfile = { index };
     this._editDialogTab = 'basic';
+    this._tempProfileData = null;  // Reset temporäre Daten
     this.render();
   }
 
@@ -1002,10 +1011,48 @@ class ShutterPilotCard extends HTMLElement {
     this.render();
   }
 
+  _saveCurrentProfileFormData() {
+    // Sammle aktuelle Formular-Daten aus dem Dialog
+    const form = this.shadowRoot.querySelector('#profile-form');
+    if (!form) return;
+    
+    const formData = new FormData(form);
+    
+    // Initialisiere temporäre Daten mit aktuellem Profil falls noch nicht vorhanden
+    if (!this._tempProfileData) {
+      const originalProfile = this._editingProfile?.index >= 0 ? 
+        this._profiles[this._editingProfile.index] : 
+        this._getEmptyProfile();
+      this._tempProfileData = { ...originalProfile };
+    }
+    
+    // Aktualisiere alle Formular-Felder
+    for (const [key, value] of formData.entries()) {
+      if (key === 'enabled') {
+        this._tempProfileData[key] = true;  // Checkbox checked
+      } else if (form.elements[key].type === 'number') {
+        this._tempProfileData[key] = value ? parseFloat(value) : 0;
+      } else {
+        this._tempProfileData[key] = value;
+      }
+    }
+    
+    // Checkbox-Felder die nicht in FormData sind (unchecked)
+    const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+      if (!formData.has(cb.name)) {
+        this._tempProfileData[cb.name] = false;
+      }
+    });
+    
+    console.log('💾 Formular-Daten zwischengespeichert:', this._tempProfileData);
+  }
+
   _closeDialog() {
     this._editingProfile = null;
     this._editingArea = null;
     this._editDialogTab = 'basic';
+    this._tempProfileData = null;  // Lösche temporäre Daten
     this.render();
   }
 
@@ -1098,21 +1145,23 @@ class ShutterPilotCard extends HTMLElement {
         areas: Object.keys(this._areas).length
       });
 
-      // Nutze den update_config Service
+      // Nutze den update_config Service (triggert automatisch Integration-Reload)
       await this._hass.callService('shutterpilot', 'update_config', {
         profiles: cleanProfiles,
         areas: this._areas,
       });
 
-      console.log('✅ Service-Call erfolgreich');
+      console.log('✅ Service-Call erfolgreich, Integration lädt neu...');
 
       this._showToast('Konfiguration gespeichert', 'success');
 
-      // Warte kurz auf Reload, dann neu laden
+      // Warte auf Integration-Reload (ca. 2-3 Sekunden), dann Config neu laden
       setTimeout(async () => {
+        console.log('🔄 Lade Config neu nach Integration-Reload...');
         await this._loadConfigEntry();
         this.render();
-      }, 1000);
+        console.log('✅ Config erfolgreich neu geladen');
+      }, 2500);
 
     } catch (err) {
       console.error('Fehler beim Speichern:', err);
@@ -2031,7 +2080,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c  SHUTTERPILOT-CARD  \n%c  Version 2.1.0 - Fixed Config Sensor Entity ID ',
+  '%c  SHUTTERPILOT-CARD  \n%c  Version 2.2.1 - Save to Backend Fixed ',
   'color: white; background: #1a73e8; font-weight: 700;',
   'color: #1a73e8; font-weight: 300;'
 );

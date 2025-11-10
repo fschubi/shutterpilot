@@ -69,7 +69,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Update config entry
         hass.config_entries.async_update_entry(entry, options=new_options)
-        _LOGGER.info("Config entry updated, will reload automatically")
+        _LOGGER.info("Config entry updated, triggering reload...")
+        
+        # Trigger reload to apply changes
+        await hass.config_entries.async_reload(entry.entry_id)
+        _LOGGER.info("Integration reloaded successfully")
 
     hass.services.async_register(DOMAIN, "all_up", _all_up)
     hass.services.async_register(DOMAIN, "all_down", _all_down)
