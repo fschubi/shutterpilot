@@ -54,16 +54,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         profiles = call.data.get("profiles", [])
         areas = call.data.get("areas", {})
         
+        _LOGGER.info("update_config service called with %d profiles and %d areas", 
+                     len(profiles) if profiles else 0, 
+                     len(areas) if areas else 0)
+        
         # Merge with existing options
         new_options = {**entry.options}
         if profiles is not None:
             new_options[CONF_PROFILES] = profiles
+            _LOGGER.debug("Updated profiles: %s", [p.get('name', '?') for p in profiles])
         if areas:
             new_options["areas"] = areas
+            _LOGGER.debug("Updated areas: %s", list(areas.keys()))
         
         # Update config entry
         hass.config_entries.async_update_entry(entry, options=new_options)
-        _LOGGER.info("Config updated via service, reloading...")
+        _LOGGER.info("Config entry updated, will reload automatically")
 
     hass.services.async_register(DOMAIN, "all_up", _all_up)
     hass.services.async_register(DOMAIN, "all_down", _all_down)

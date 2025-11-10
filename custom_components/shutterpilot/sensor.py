@@ -354,22 +354,16 @@ class ShutterPilotSunElevationSensor(SensorEntity):
 class ShutterPilotConfigSensor(SensorEntity):
     """Sensor that exposes config for the management card."""
 
-    _attr_has_entity_name = True
+    _attr_has_entity_name = False  # Use explicit name
     _attr_should_poll = False
-    _attr_entity_registry_enabled_default = False  # Hidden by default
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the sensor."""
         self.hass = hass
         self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_config"
-        self._attr_name = "Configuration"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=f"ShutterPilot",
-            manufacturer="ShutterPilot",
-            model="Configuration",
-        )
+        self._attr_unique_id = f"{DOMAIN}_config_sensor"
+        self._attr_name = "ShutterPilot Config"
+        # NO device_info to ensure entity_id is just sensor.shutterpilot_config
 
     @property
     def native_value(self) -> str:
@@ -396,9 +390,14 @@ class ShutterPilotConfigSensor(SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register update listener."""
-        self._entry.add_update_listener(self._update_listener)
-
-    async def _update_listener(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        """Handle options update."""
-        self.async_write_ha_state()
+        
+        @callback
+        def _handle_config_update(hass: HomeAssistant, entry: ConfigEntry):
+            """Handle config update."""
+            self._entry = entry  # Update entry reference
+            self.async_write_ha_state()
+        
+        self.async_on_remove(
+            self._entry.add_update_listener(_handle_config_update)
+        )
 

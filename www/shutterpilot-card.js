@@ -57,23 +57,23 @@ class ShutterPilotCard extends HTMLElement {
     if (!this._hass) return;
 
     try {
-      // Find config sensor
-      const configSensor = Object.keys(this._hass.states).find(e => 
-        e.startsWith('sensor.shutterpilot_') && e.endsWith('_configuration')
-      );
+      // Find config sensor with explicit entity_id
+      const configSensorId = 'sensor.shutterpilot_config';
+      const sensorState = this._hass.states[configSensorId];
 
-      if (!configSensor) {
-        console.warn('ShutterPilot Config Sensor nicht gefunden');
+      if (!sensorState) {
+        console.warn('❌ ShutterPilot Config Sensor nicht gefunden:', configSensorId);
+        console.warn('Verfügbare Sensoren:', Object.keys(this._hass.states).filter(e => e.includes('shutterpilot')));
         return;
       }
 
-      const sensorState = this._hass.states[configSensor];
-      if (!sensorState || !sensorState.attributes) {
-        console.warn('Config Sensor hat keine Attributes');
+      if (!sensorState.attributes) {
+        console.warn('❌ Config Sensor hat keine Attributes');
         return;
       }
 
       const attrs = sensorState.attributes;
+      console.log('✅ Config Sensor geladen:', attrs);
       
       // Store entry ID
       this._configEntry = {
@@ -97,10 +97,11 @@ class ShutterPilotCard extends HTMLElement {
         sun_offset_down: 0,
       };
 
+      console.log(`✅ ${this._profiles.length} Profile geladen:`, this._profiles.map(p => p.name));
       this._enrichProfilesWithStatus();
 
     } catch (err) {
-      console.error('Fehler beim Laden der Config Entry:', err);
+      console.error('❌ Fehler beim Laden der Config Entry:', err);
     }
   }
 
@@ -1079,6 +1080,7 @@ class ShutterPilotCard extends HTMLElement {
   async _saveConfig() {
     if (!this._configEntry) {
       this._showToast('Config Entry nicht gefunden', 'error');
+      console.error('❌ _saveConfig: Config Entry nicht gefunden');
       return;
     }
 
@@ -1091,11 +1093,18 @@ class ShutterPilotCard extends HTMLElement {
         return clean;
       });
 
+      console.log('💾 Speichere Config:', {
+        profiles: cleanProfiles.length,
+        areas: Object.keys(this._areas).length
+      });
+
       // Nutze den update_config Service
       await this._hass.callService('shutterpilot', 'update_config', {
         profiles: cleanProfiles,
         areas: this._areas,
       });
+
+      console.log('✅ Service-Call erfolgreich');
 
       this._showToast('Konfiguration gespeichert', 'success');
 
@@ -2022,7 +2031,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c  SHUTTERPILOT-CARD  \n%c  Version 2.0.2 - Config Sensor + Save Fix ',
+  '%c  SHUTTERPILOT-CARD  \n%c  Version 2.1.0 - Fixed Config Sensor Entity ID ',
   'color: white; background: #1a73e8; font-weight: 700;',
   'color: #1a73e8; font-weight: 300;'
 );
