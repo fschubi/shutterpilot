@@ -49,10 +49,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         for c in store[RUNTIME_PROFILES]:
             await c.evaluate_policy_and_apply()
 
-    async def _update_config(call: ServiceCall):
-        """Update config entry options (for card usage)."""
-        import asyncio
-        
+    def _update_config(call: ServiceCall):
+        """Update config entry options (for card usage). NON-async to avoid coroutine issues."""
         profiles = call.data.get("profiles", [])
         areas = call.data.get("areas", {})
         
@@ -69,16 +67,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             new_options["areas"] = areas
             _LOGGER.debug("Updated areas: %s", list(areas.keys()))
         
-        # Update config entry
+        # Update config entry (this persists to storage)
         hass.config_entries.async_update_entry(entry, options=new_options)
-        _LOGGER.info("Config entry updated, triggering reload...")
+        _LOGGER.info("Config entry updated and persisted to storage")
         
-        # Give event loop a moment to process the update
-        await asyncio.sleep(0.01)
+        # Schedule a reload as a background task
+        async def _do_reload():
+            _LOGGER.info("Background: Reloading integration...")
+            await hass.config_entries.async_reload(entry.entry_id)
+            _LOGGER.info("Background: Integration reloaded successfully")
         
-        # Reload integration to apply changes
-        await hass.config_entries.async_reload(entry.entry_id)
-        _LOGGER.info("Integration reloaded successfully")
+        hass.async_create_task(_do_reload())
+        _LOGGER.info("Config update service completed, reload scheduled")
 
     hass.services.async_register(DOMAIN, "all_up", _all_up)
     hass.services.async_register(DOMAIN, "all_down", _all_down)

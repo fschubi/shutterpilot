@@ -1,7 +1,7 @@
 /**
  * ShutterPilot Management Card
  * Professional Enterprise-Level UI for ShutterPilot
- * Version: 2.4.0 - Fixed Profile Save (All Tabs)
+ * Version: 2.5.0 - Non-Async Service (No Coroutine Error)
  */
 
 class ShutterPilotCard extends HTMLElement {
@@ -1133,21 +1133,21 @@ class ShutterPilotCard extends HTMLElement {
         areas: Object.keys(this._areas).length
       });
 
-      // Nutze den update_config Service (triggert asynchron Integration-Reload)
+      // Nutze den update_config Service (triggert Background-Reload)
       await this._hass.callService('shutterpilot', 'update_config', {
         profiles: cleanProfiles,
         areas: this._areas,
       });
 
-      console.log('✅ Service-Call erfolgreich!');
-      this._showToast('Konfiguration gespeichert', 'success');
+      console.log('✅ Service-Call erfolgreich! Config wurde gespeichert.');
+      this._showToast('Gespeichert! Integration lädt neu...', 'success');
 
-      // Warte auf Integration-Reload und poll Config-Sensor bis neue Daten da sind
-      console.log('🔄 Warte auf Integration-Reload...');
+      // Warte auf Integration-Reload und poll Config-Sensor
+      console.log('🔄 Warte auf Integration-Reload (Background-Task)...');
       
       let attempts = 0;
-      const maxAttempts = 10;
-      const checkInterval = 500; // Check alle 500ms
+      const maxAttempts = 15;  // Erhöht für längere Wartezeit
+      const checkInterval = 700; // Check alle 700ms
       
       const pollConfig = async () => {
         attempts++;
@@ -1155,23 +1155,24 @@ class ShutterPilotCard extends HTMLElement {
         
         // Prüfe ob neue Profile geladen wurden
         const currentProfileCount = this._profiles.length;
-        console.log(`🔄 Versuch ${attempts}/${maxAttempts}: ${currentProfileCount} Profile geladen`);
+        console.log(`🔄 Poll ${attempts}/${maxAttempts}: ${currentProfileCount} von ${cleanProfiles.length} Profilen geladen`);
         
-        if (currentProfileCount === cleanProfiles.length || attempts >= maxAttempts) {
+        if (currentProfileCount === cleanProfiles.length) {
           this.render();
-          if (currentProfileCount === cleanProfiles.length) {
-            console.log('✅ Alle Profile erfolgreich geladen!');
-          } else {
-            console.warn('⚠️ Timeout: Nicht alle Profile geladen');
-          }
+          console.log('✅ Alle Profile erfolgreich geladen!');
+          this._showToast('Integration neu geladen!', 'success');
+        } else if (attempts >= maxAttempts) {
+          this.render();
+          console.warn('⚠️ Timeout: Integration-Reload dauert länger als erwartet');
+          this._showToast('Bitte Seite manuell neu laden (F5)', 'warning');
         } else {
           // Versuche erneut
           setTimeout(pollConfig, checkInterval);
         }
       };
       
-      // Starte nach 1 Sekunde (gibt Integration Zeit zum Reload)
-      setTimeout(pollConfig, 1000);
+      // Starte nach 1,5 Sekunden (gibt Integration Zeit zum Start des Reloads)
+      setTimeout(pollConfig, 1500);
 
     } catch (err) {
       console.error('Fehler beim Speichern:', err);
@@ -2090,7 +2091,7 @@ window.customCards.push({
 });
 
 console.info(
-  '%c  SHUTTERPILOT-CARD  \n%c  Version 2.4.0 - Profile Save with All Tabs ',
+  '%c  SHUTTERPILOT-CARD  \n%c  Version 2.5.0 - Non-Async Service Fix ',
   'color: white; background: #1a73e8; font-weight: 700;',
   'color: #1a73e8; font-weight: 300;'
 );
