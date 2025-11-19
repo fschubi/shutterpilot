@@ -20,12 +20,16 @@ A_DOWN_TIME_WEEKEND = "down_time_weekend"
 A_UP_EARLIEST = "up_earliest"
 A_UP_LATEST = "up_latest"
 A_STAGGER_DELAY = "stagger_delay"
-A_MODE = "area_mode"  # time_only, sun, golden_hour
+A_MODE = "area_mode"  # time_only, sun, golden_hour, brightness
+A_BRIGHTNESS_SENSOR = "brightness_sensor"  # Helligkeitssensor für Bereich
+A_BRIGHTNESS_DOWN = "brightness_down_lux"   # Lux-Wert zum Runterfahren
+A_BRIGHTNESS_UP = "brightness_up_lux"       # Lux-Wert zum Hochfahren
 
 # Area modes
 MODE_TIME_ONLY = "time_only"
 MODE_SUN = "sun"
 MODE_GOLDEN_HOUR = "golden_hour"
+MODE_BRIGHTNESS = "brightness"
 
 # Profiles
 CONF_PROFILES = "profiles"

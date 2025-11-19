@@ -34,6 +34,45 @@
           "action": "Select a profile action"
         }
       },
+      "manage_areas": {
+        "title": "Manage Areas",
+        "description": "Configure living, sleeping and children areas",
+        "data": {
+          "area_action": "Area"
+        }
+      },
+      "edit_area": {
+        "title": "Edit Area",
+        "description": "Time settings for this area",
+        "data": {
+          "area_name": "Area name",
+          "area_mode": "Control mode",
+          "up_time_weekday": "Open time weekday (HH:MM)",
+          "down_time_weekday": "Close time weekday (HH:MM)",
+          "up_time_weekend": "Open time weekend (HH:MM)",
+          "down_time_weekend": "Close time weekend (HH:MM)",
+          "up_earliest": "Earliest open time (HH:MM)",
+          "up_latest": "Latest open time (HH:MM)",
+          "stagger_delay": "Delay between shutters (seconds)",
+          "brightness_sensor": "Brightness sensor (optional)",
+          "brightness_down_lux": "Brightness to close (Lux)",
+          "brightness_up_lux": "Brightness to open (Lux)"
+        },
+        "data_description": {
+          "area_name": "Name for this area",
+          "area_mode": "Type of time control for shutters in this area",
+          "up_time_weekday": "Time to open during weekdays",
+          "down_time_weekday": "Time to close during weekdays",
+          "up_time_weekend": "Time to open on weekends",
+          "down_time_weekend": "Time to close on weekends",
+          "up_earliest": "Shutters open at earliest at this time",
+          "up_latest": "Shutters open at latest at this time",
+          "stagger_delay": "Time delay between individual shutter movements to avoid RF interference",
+          "brightness_sensor": "Brightness sensor for brightness-based control (only for 'Brightness' mode)",
+          "brightness_down_lux": "Lux value below which shutters close (e.g. 5000 lx)",
+          "brightness_up_lux": "Lux value above which shutters open (e.g. 15000 lx)"
+        }
+      },
       "add_profile": {
         "title": "Add New Profile",
         "description": "Create a new shutter profile with individual settings.",
@@ -161,9 +200,26 @@
     "action": {
       "options": {
         "none": "No action (save only)",
+        "manage_areas": "Manage areas",
         "add_profile": "Add new profile",
         "edit_profile": "Edit profile",
         "remove_profile": "Remove profile"
+      }
+    },
+    "area": {
+      "options": {
+        "none": "No area assignment",
+        "living": "Living area",
+        "sleeping": "Sleeping area",
+        "children": "Children area"
+      }
+    },
+    "area_mode": {
+      "options": {
+        "time_only": "Time only",
+        "sun": "Time with sunrise/sunset",
+        "golden_hour": "Time with golden hour",
+        "brightness": "Brightness (Lux-based)"
       }
     }
   },

@@ -22,7 +22,8 @@ from .const import (
     AREA_LIVING, AREA_SLEEPING, AREA_CHILDREN,
     A_NAME, A_MODE, A_UP_TIME_WEEK, A_DOWN_TIME_WEEK, A_UP_TIME_WEEKEND,
     A_DOWN_TIME_WEEKEND, A_UP_EARLIEST, A_UP_LATEST, A_STAGGER_DELAY,
-    MODE_TIME_ONLY, MODE_SUN, MODE_GOLDEN_HOUR,
+    A_BRIGHTNESS_SENSOR, A_BRIGHTNESS_DOWN, A_BRIGHTNESS_UP,
+    MODE_TIME_ONLY, MODE_SUN, MODE_GOLDEN_HOUR, MODE_BRIGHTNESS,
     P_NAME, P_COVER, P_AREA, P_WINDOW, P_DOOR, P_DAY_POS, P_NIGHT_POS, P_VPOS,
     P_DOOR_SAFE, P_LUX, P_TEMP, P_LUX_TH, P_TEMP_TH, P_LUX_HYSTERESIS, P_TEMP_HYSTERESIS,
     P_UP_TIME, P_DOWN_TIME, P_AZ_MIN, P_AZ_MAX, P_COOLDOWN, P_ENABLED,
@@ -92,6 +93,9 @@ class ProfileController:
         self.light_brightness = _to_int(cfg.get(P_LIGHT_BRIGHTNESS, 80), 80)
         self.light_on_shade = bool(cfg.get(P_LIGHT_ON_SHADE, True))
         self.light_on_night = bool(cfg.get(P_LIGHT_ON_NIGHT, True))
+        
+        # Lade Bereichs-Konfiguration
+        self._area_config = self._get_area_config()
 
         self._cooldown_until: Optional[datetime] = None
         self._cooldown_timer: Optional[CALLBACK_TYPE] = None
@@ -106,6 +110,14 @@ class ProfileController:
         self._last_lux_trigger_active: Optional[bool] = None
         self._last_temp_trigger_active: Optional[bool] = None
         self._brightness_end_timer: Optional[CALLBACK_TYPE] = None
+        
+        # Trigger-basiertes System (wie input_boolean.rolladen_triggered in den Original-Automationen)
+        self._system_is_moving_cover: bool = False  # Flag: Wir bewegen gerade den Rollladen
+        self._triggered_up: bool = False  # Flag: System hat HOCH getriggert (darf nicht nochmal hoch bis Reset)
+        self._triggered_down: bool = False  # Flag: System hat RUNTER getriggert (darf nicht nochmal runter bis Reset)
+        self._window_not_close: bool = False  # Flag: Rollladen ist unten, Fenster/Tür-Logik aktiv (wie input_boolean.window_not_close)
+        self._last_cover_position: Optional[int] = None  # Letzte bekannte Position
+        self._reset_timer: Optional[CALLBACK_TYPE] = None  # Timer für tägliches Reset
 
     async def async_start(self):
         if not self.cover:
@@ -126,11 +138,27 @@ class ProfileController:
             self._unsubs.append(async_track_state_change_event(self.hass, [self.lux_sensor], self._on_env_change))
         if self.temp_sensor:
             self._unsubs.append(async_track_state_change_event(self.hass, [self.temp_sensor], self._on_env_change))
+        
+        # Subscribe to area brightness sensor if in brightness mode
+        area_mode = self._area_config.get(A_MODE, MODE_TIME_ONLY)
+        area_brightness_sensor = self._area_config.get(A_BRIGHTNESS_SENSOR)
+        if area_mode == MODE_BRIGHTNESS and area_brightness_sensor:
+            self._unsubs.append(async_track_state_change_event(self.hass, [area_brightness_sensor], self._on_env_change))
+            _LOGGER.debug("Profile %s: Subscribed to area brightness sensor %s", self.name, area_brightness_sensor)
+        
+        # Subscribe to cover state changes to detect manual changes
+        self._unsubs.append(async_track_state_change_event(self.hass, [self.cover], self._on_cover_change))
+        _LOGGER.debug("Profile %s: Subscribed to cover state changes for manual change detection", self.name)
 
         # sunrise/sunset + 1-min tick as safety net
         self._unsubs.append(async_track_sunrise(self.hass, self._on_sun_event))
         self._unsubs.append(async_track_sunset(self.hass, self._on_sun_event))
         self._unsubs.append(async_track_time_interval(self.hass, self._on_tick, timedelta(minutes=1)))
+        
+        # Tägliches Reset um 3 Uhr (wie in der Original-Automation)
+        from homeassistant.helpers.event import async_track_time_change
+        self._unsubs.append(async_track_time_change(self.hass, self._on_daily_reset, hour=3, minute=0, second=0))
+        _LOGGER.debug("Profile %s: Scheduled daily reset at 03:00", self.name)
 
         # First evaluation
         self._update_status("active", "initialization")
@@ -186,19 +214,34 @@ class ProfileController:
             self._update_status("inactive", "cover_not_found")
             return
 
-        # if door open -> safe gap
-        if self._is_on(self.door):
-            _LOGGER.debug("[%s] Door open → door_safe", self.name)
-            self._update_status("active", "door_open")
-            await self._set_pos(max(self.vpos, self.door_safe))
-            return
+        # TÜR-AUSSPERRSCHUTZ: IMMER aktiv (unabhängig von window_not_close)
+        if self.door:
+            door_state_obj = self.hass.states.get(self.door)
+            if door_state_obj:
+                door_state = door_state_obj.state
+                if door_state == "open" or (door_state == STATE_ON):
+                    # Tür komplett offen → Aussperrschutz
+                    _LOGGER.debug("[%s] Door OPEN → door_safe (Aussperrschutz)", self.name)
+                    self._update_status("active", "door_open")
+                    await self._set_pos(self.door_safe)
+                    return
+                elif door_state == "tilted" and self._window_not_close:
+                    # Tür gekippt UND Fenster-Logik aktiv → Lüftungsposition
+                    _LOGGER.debug("[%s] Door TILTED + window_not_close=True → ventilation", self.name)
+                    self._update_status("active", "door_tilted")
+                    await self._set_pos(self.vpos)
+                    return
 
-        # if window open -> ventilation
-        if self._is_on(self.window):
-            _LOGGER.debug("[%s] Window open → ventilation", self.name)
+        # FENSTER-LOGIK: Nur aktiv wenn Rollladen unten/runtergefahren ist (window_not_close = True)
+        if self._is_on(self.window) and self._window_not_close:
+            _LOGGER.debug("[%s] Window open + window_not_close=True → ventilation", self.name)
             self._update_status("active", "window_open")
             await self._set_pos(self.vpos)
             return
+        elif self._is_on(self.window) and not self._window_not_close:
+            _LOGGER.debug("[%s] Window open but window_not_close=False (cover is up) → ignoring", self.name)
+            # Rollladen ist oben, Fenster-Öffnung wird ignoriert
+            pass
 
         # cooldown after window close -> wait out
         if self._cooldown_until and datetime.now() < self._cooldown_until:
@@ -223,6 +266,82 @@ class ProfileController:
             self._update_status("active", "time_schedule_up")
             await self.open_cover()
             return
+        
+        # Helligkeits-basierte Steuerung (wenn Bereich im Brightness-Modus)
+        area_mode = self._area_config.get(A_MODE, MODE_TIME_ONLY)
+        if area_mode == MODE_BRIGHTNESS:
+            area_brightness_sensor = self._area_config.get(A_BRIGHTNESS_SENSOR)
+            brightness_down = _to_float(self._area_config.get(A_BRIGHTNESS_DOWN, 5000), 5000)
+            brightness_up = _to_float(self._area_config.get(A_BRIGHTNESS_UP, 15000), 15000)
+            
+            if area_brightness_sensor:
+                current_brightness = self._float_state(area_brightness_sensor, 0.0)
+                
+                # TRIGGER-SYSTEM (wie in Original-Automationen):
+                # - triggered_down = False → Darf runterfahren wenn Lux < down
+                # - triggered_up = False → Darf hochfahren wenn Lux > up
+                # - Nach Aktion → entsprechendes Flag auf True
+                # - Erlaubt manuelle Änderungen JEDERZEIT (Position bleibt)
+                # - Reset um 3 Uhr → beide Flags auf False
+                
+                if current_brightness < brightness_down and not self._triggered_down:
+                    # Dunkel UND noch nicht runter getriggert → Rollladen runterfahren
+                    # PRÜFE: Ist Fenster/Tür offen? → Nur Lüftungsposition!
+                    if self._is_on(self.window) or self._is_on(self.door):
+                        _LOGGER.info("[%s] 🌙 Brightness DOWN trigger + Window/Door OPEN → ventilation position", 
+                                      self.name)
+                        self._update_status("active", "brightness_low_with_window_open")
+                        await self._set_pos(self.vpos)
+                    else:
+                        _LOGGER.info("[%s] 🌙 Brightness DOWN trigger: lux=%.0f < %.0f → closing to night position", 
+                                      self.name, current_brightness, brightness_down)
+                        self._update_status("active", f"brightness_low_{int(current_brightness)}")
+                        await self._set_pos(self.night_pos)
+                    
+                    self._triggered_down = True  # RUNTER-TRIGGER SETZEN
+                    self._triggered_up = False   # HOCH-TRIGGER ZURÜCKSETZEN (kann jetzt wieder hoch)
+                    self._window_not_close = True  # FENSTER-LOGIK AKTIVIEREN!
+                    
+                    # Light automation: Turn on light when dark
+                    if self.light_on_night:
+                        await self._control_light(True, "brightness_low")
+                    return
+                elif current_brightness > brightness_up and not self._triggered_up:
+                    # Hell UND noch nicht hoch getriggert → Rollladen hochfahren
+                    _LOGGER.info("[%s] ☀️ Brightness UP trigger: lux=%.0f > %.0f → opening", 
+                                  self.name, current_brightness, brightness_up)
+                    self._update_status("active", f"brightness_high_{int(current_brightness)}")
+                    self._triggered_up = True    # HOCH-TRIGGER SETZEN
+                    self._triggered_down = False # RUNTER-TRIGGER ZURÜCKSETZEN (kann jetzt wieder runter)
+                    self._window_not_close = False  # FENSTER-LOGIK DEAKTIVIEREN!
+                    await self.open_cover()
+                    # Light automation: Turn off light when bright
+                    await self._control_light(False, "brightness_high")
+                    return
+                elif current_brightness >= brightness_down and current_brightness <= brightness_up:
+                    # In Hysterese-Bereich → aktuellen Zustand beibehalten
+                    _LOGGER.debug("[%s] 🔄 Brightness in range [%.0f - %.0f] → maintaining position", 
+                                  self.name, brightness_down, brightness_up)
+                    self._update_status("active", f"brightness_hold_{int(current_brightness)}")
+                    return
+                elif self._triggered_down and current_brightness < brightness_down:
+                    # Bereits runtergefahren → keine weitere Aktion
+                    _LOGGER.debug("[%s] 🔒 Already triggered DOWN - waiting for UP trigger or manual change", 
+                                  self.name)
+                    return
+                elif self._triggered_up and current_brightness > brightness_up:
+                    # Bereits hochgefahren → keine weitere Aktion
+                    _LOGGER.debug("[%s] 🔒 Already triggered UP - waiting for DOWN trigger or manual change", 
+                                  self.name)
+                    return
+                else:
+                    # Zwischen den Schwellwerten → aktuellen Zustand beibehalten
+                    _LOGGER.debug("[%s] Brightness mode: lux=%.0f in range [%.0f - %.0f] → maintaining current state", 
+                                  self.name, current_brightness, brightness_down, brightness_up)
+                    self._update_status("active", f"brightness_hold_{int(current_brightness)}")
+                    return
+            else:
+                _LOGGER.warning("[%s] Area mode is BRIGHTNESS but no brightness sensor configured!", self.name)
 
         # Solar/env policy
         sun_state = self.hass.states.get("sun.sun")
@@ -273,17 +392,25 @@ class ProfileController:
 
         to_state = event.data.get("new_state")
         if to_state and to_state.state == STATE_ON:
-            # window opened → ventilation; cancel any cooldown timer
-            if self._cooldown_timer:
-                try:
-                    self._cooldown_timer()
-                except Exception:
-                    pass
-                self._cooldown_timer = None
-            self._cooldown_until = None
-            _LOGGER.debug("[%s] Window opened → ventilation pos=%s", self.name, self.vpos)
-            self._update_status("active", "window_opened")
-            await self._set_pos(self.vpos)
+            # window opened
+            # NUR reagieren wenn window_not_close = True (Rollladen ist unten)!
+            if self._window_not_close:
+                # window opened → ventilation; cancel any cooldown timer
+                if self._cooldown_timer:
+                    try:
+                        self._cooldown_timer()
+                    except Exception:
+                        pass
+                    self._cooldown_timer = None
+                self._cooldown_until = None
+                _LOGGER.info("[%s] 🪟 Window opened + window_not_close=True → ventilation pos=%s%%", 
+                            self.name, self.vpos)
+                self._update_status("active", "window_opened")
+                await self._set_pos(self.vpos)
+            else:
+                _LOGGER.info("[%s] 🪟 Window opened but window_not_close=False → ignoring (cover is up)", 
+                            self.name)
+                # Rollladen ist oben, Fenster wird ignoriert
         else:
             # window closed → plan cooldown
             cd = max(0, int(self.cooldown))
@@ -341,21 +468,95 @@ class ProfileController:
         if not self._auto_allowed():
             return
         to_state = event.data.get("new_state")
-        if to_state and to_state.state == STATE_ON:
-            _LOGGER.debug("[%s] Door opened → door_safe", self.name)
-            self._update_status("active", "door_opened")
-            await self._set_pos(max(self.vpos, self.door_safe))
-        else:
+        if not to_state:
+            return
+        
+        door_state = to_state.state
+        
+        # Tür-Logik mit 3 Zuständen:
+        # - "closed" = zu → Normal
+        # - "tilted" = gekippt → Lüftungsposition (NUR wenn window_not_close = True)
+        # - "open" = auf → Aussperrschutz (IMMER, unabhängig von window_not_close!)
+        
+        if door_state == "open" or (door_state == STATE_ON and not hasattr(to_state, 'attributes')):
+            # Tür komplett offen → AUSSPERRSCHUTZ (IMMER aktiv!)
+            _LOGGER.info("[%s] 🚪 Door OPEN → Aussperrschutz (door_safe=%d%%)", self.name, self.door_safe)
+            self._update_status("active", "door_open_lockout")
+            await self._set_pos(self.door_safe)
+        elif door_state == "tilted":
+            # Tür gekippt → Wie Fenster-Lüftung (NUR wenn window_not_close = True)
+            if self._window_not_close:
+                _LOGGER.info("[%s] 🚪 Door TILTED + window_not_close=True → ventilation pos=%d%%", 
+                            self.name, self.vpos)
+                self._update_status("active", "door_tilted")
+                await self._set_pos(self.vpos)
+            else:
+                _LOGGER.info("[%s] 🚪 Door TILTED but window_not_close=False → ignoring (cover is up)", 
+                            self.name)
+        else:  # "closed" or STATE_OFF
+            # Tür geschlossen → Re-evaluate
             _LOGGER.debug("[%s] Door closed → re-evaluate", self.name)
             await self.evaluate_policy_and_apply()
 
     async def _on_env_change(self, event):
         await self.evaluate_policy_and_apply()
+    
+    async def _on_cover_change(self, event):
+        """Detect manual cover changes - Position wird beibehalten, System wartet auf nächsten Trigger."""
+        if not self._auto_allowed():
+            return
+        
+        # Ignore if we are currently moving the cover
+        if self._system_is_moving_cover:
+            _LOGGER.debug("[%s] Cover change detected but system is moving → ignore", self.name)
+            return
+        
+        to_state = event.data.get("new_state")
+        from_state = event.data.get("old_state")
+        
+        if not to_state or not from_state:
+            return
+        
+        # Check if position changed (manual intervention)
+        try:
+            old_pos = from_state.attributes.get("current_position")
+            new_pos = to_state.attributes.get("current_position")
+            
+            if old_pos is not None and new_pos is not None:
+                old_pos = int(old_pos)
+                new_pos = int(new_pos)
+                
+                # Position changed → manual intervention detected
+                if abs(old_pos - new_pos) > 2:  # Ignore tiny changes (noise)
+                    _LOGGER.info("[%s] ✋ Manual change detected: %d%% → %d%% → Position wird beibehalten", 
+                                self.name, old_pos, new_pos)
+                    
+                    # TRIGGER-SYSTEM: Flags BLEIBEN wie sie sind!
+                    # Manuelle Position wird respektiert bis:
+                    # - Nächster Brightness-Trigger (UP oder DOWN)
+                    # - Tägliches Reset um 3 Uhr
+                    # - Fenster/Tür-Aktion (hat Priorität)
+                    
+                    _LOGGER.info("[%s] 🔓 Manual position active - automation will resume on next brightness trigger or daily reset at 3am", 
+                                self.name)
+                    self._update_status("active", "manual_control_active")
+        except (ValueError, TypeError, AttributeError) as ex:
+            _LOGGER.debug("[%s] Error processing cover change: %s", self.name, ex)
 
     async def _on_sun_event(self, *args):
         await self.evaluate_policy_and_apply()
 
     async def _on_tick(self, now):
+        await self.evaluate_policy_and_apply()
+    
+    async def _on_daily_reset(self, now):
+        """Tägliches Reset um 3 Uhr - Alle Trigger zurücksetzen (wie Reset Rolladen Trigger Automation)."""
+        _LOGGER.info("[%s] 🌅 Daily reset at 03:00 - Resetting all trigger flags", self.name)
+        self._triggered_up = False
+        self._triggered_down = False
+        self._window_not_close = False  # Auch window_not_close zurücksetzen
+        self._update_status("active", "daily_reset")
+        # Nach Reset: Sofort neu evaluieren (kann jetzt wieder fahren)
         await self.evaluate_policy_and_apply()
 
     # ---------- helpers ----------
@@ -377,6 +578,13 @@ class ProfileController:
     def _auto_allowed(self) -> bool:
         opt = self.entry.options
         return bool(opt.get(CONF_GLOBAL_AUTO, True) and self.enabled)
+    
+    def _get_area_config(self) -> dict:
+        """Lade die Bereichs-Konfiguration für dieses Profil."""
+        if self.area == "none" or not self.area:
+            return {}
+        areas = self.entry.options.get(CONF_AREAS, {})
+        return areas.get(self.area, {})
     
     def _validate_cover_exists(self) -> bool:
         """Validate cover entity exists at runtime. Returns True if OK."""
@@ -400,13 +608,15 @@ class ProfileController:
         if not self.cover:
             return
         
+        # Set flag to indicate system is moving cover (prevents manual change detection)
+        self._system_is_moving_cover = True
+        
         try:
             domain, srv = service.split(".")
             if self.hass.services.has_service(domain, srv):
                 payload = dict(data or {})
                 payload["entity_id"] = self.cover
                 await self.hass.services.async_call(domain, srv, payload, blocking=False)
-                return
             elif fallback:
                 # Try fallback if primary service not available
                 f_domain, f_srv = fallback[0].split(".")
@@ -423,6 +633,14 @@ class ProfileController:
         except Exception as ex:
             _LOGGER.exception("[%s] Error calling service %s for %s: %s", 
                            self.name, service, self.cover, ex)
+        finally:
+            # Reset flag after a short delay (cover needs time to start moving)
+            async def _reset_flag():
+                await asyncio.sleep(2)  # 2 seconds should be enough for cover to start
+                self._system_is_moving_cover = False
+                _LOGGER.debug("[%s] System movement flag reset", self.name)
+            
+            self.hass.async_create_task(_reset_flag())
 
     async def _set_pos(self, pos: int):
         pos = max(0, min(100, int(pos)))

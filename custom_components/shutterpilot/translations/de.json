@@ -63,7 +63,10 @@
           "down_time_weekend": "Runterfahrzeit Wochenende (HH:MM)",
           "up_earliest": "Früheste Hochfahrzeit (HH:MM)",
           "up_latest": "Späteste Hochfahrzeit (HH:MM)",
-          "stagger_delay": "Verzögerung zwischen Rollläden (Sekunden)"
+          "stagger_delay": "Verzögerung zwischen Rollläden (Sekunden)",
+          "brightness_sensor": "Helligkeitssensor (optional)",
+          "brightness_down_lux": "Helligkeit zum Runterfahren (Lux)",
+          "brightness_up_lux": "Helligkeit zum Hochfahren (Lux)"
         },
         "data_description": {
           "area_name": "Name für diesen Bereich",
@@ -74,7 +77,10 @@
           "down_time_weekend": "Zeit zum Runterfahren am Wochenende",
           "up_earliest": "Rollläden fahren frühestens zu dieser Zeit hoch",
           "up_latest": "Rollläden fahren spätestens zu dieser Zeit hoch",
-          "stagger_delay": "Zeitverzögerung zwischen einzelnen Rollladenfahrten zur Vermeidung von Funkstörungen"
+          "stagger_delay": "Zeitverzögerung zwischen einzelnen Rollladenfahrten zur Vermeidung von Funkstörungen",
+          "brightness_sensor": "Helligkeitssensor für die helligkeitsbasierte Steuerung (nur für Modus 'Helligkeit')",
+          "brightness_down_lux": "Lux-Wert unter dem die Rollläden runterfahren (z.B. 5000 lx)",
+          "brightness_up_lux": "Lux-Wert über dem die Rollläden hochfahren (z.B. 15000 lx)"
         }
       },
       "add_profile": {
@@ -235,7 +241,8 @@
       "options": {
         "time_only": "Nur Zeit",
         "sun": "Zeit mit Sonnenauf-/-untergang",
-        "golden_hour": "Zeit mit Golden Hour"
+        "golden_hour": "Zeit mit Golden Hour",
+        "brightness": "Helligkeit (Lux-basiert)"
       }
     }
   },

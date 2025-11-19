@@ -59,7 +59,10 @@ class ShutterPilotConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     A_DOWN_TIME_WEEKEND: "23:00",
                     A_UP_EARLIEST: "06:00",
                     A_UP_LATEST: "09:00",
-                    A_STAGGER_DELAY: 10
+                    A_STAGGER_DELAY: 10,
+                    A_BRIGHTNESS_SENSOR: None,
+                    A_BRIGHTNESS_DOWN: 5000,
+                    A_BRIGHTNESS_UP: 15000,
                 },
                 AREA_SLEEPING: {
                     A_NAME: "Schlafbereich",
@@ -70,7 +73,10 @@ class ShutterPilotConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     A_DOWN_TIME_WEEKEND: "22:00",
                     A_UP_EARLIEST: "05:00",
                     A_UP_LATEST: "08:00",
-                    A_STAGGER_DELAY: 10
+                    A_STAGGER_DELAY: 10,
+                    A_BRIGHTNESS_SENSOR: None,
+                    A_BRIGHTNESS_DOWN: 5000,
+                    A_BRIGHTNESS_UP: 15000,
                 },
                 AREA_CHILDREN: {
                     A_NAME: "Kinderbereich",
@@ -81,7 +87,10 @@ class ShutterPilotConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     A_DOWN_TIME_WEEKEND: "21:00",
                     A_UP_EARLIEST: "06:30",
                     A_UP_LATEST: "09:00",
-                    A_STAGGER_DELAY: 10
+                    A_STAGGER_DELAY: 10,
+                    A_BRIGHTNESS_SENSOR: None,
+                    A_BRIGHTNESS_DOWN: 5000,
+                    A_BRIGHTNESS_UP: 15000,
                 }
             }
             data = {
@@ -225,6 +234,7 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
                 MODE_TIME_ONLY: "Nur Zeit",
                 MODE_SUN: "Zeit mit Sonnenauf-/-untergang",
                 MODE_GOLDEN_HOUR: "Zeit mit Golden Hour",
+                MODE_BRIGHTNESS: "Helligkeit (Lux-basiert)",
             }),
             vol.Required(A_UP_TIME_WEEK, default=current.get(A_UP_TIME_WEEK, "07:00")): str,
             vol.Required(A_DOWN_TIME_WEEK, default=current.get(A_DOWN_TIME_WEEK, "22:00")): str,
@@ -233,6 +243,12 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             vol.Required(A_UP_EARLIEST, default=current.get(A_UP_EARLIEST, "06:00")): str,
             vol.Required(A_UP_LATEST, default=current.get(A_UP_LATEST, "09:00")): str,
             vol.Required(A_STAGGER_DELAY, default=current.get(A_STAGGER_DELAY, 10)): vol.All(int, vol.Range(min=0, max=300)),
+            # Helligkeits-Steuerung (nur für MODE_BRIGHTNESS)
+            vol.Optional(A_BRIGHTNESS_SENSOR, default=current.get(A_BRIGHTNESS_SENSOR)): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="illuminance")
+            ),
+            vol.Optional(A_BRIGHTNESS_DOWN, default=current.get(A_BRIGHTNESS_DOWN, 5000)): vol.Coerce(float),
+            vol.Optional(A_BRIGHTNESS_UP, default=current.get(A_BRIGHTNESS_UP, 15000)): vol.Coerce(float),
         })
 
         if user_input is not None:
@@ -256,6 +272,10 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
                 A_UP_EARLIEST: _validate_time(user_input[A_UP_EARLIEST]),
                 A_UP_LATEST: _validate_time(user_input[A_UP_LATEST]),
                 A_STAGGER_DELAY: user_input[A_STAGGER_DELAY],
+                # Helligkeits-Steuerung
+                A_BRIGHTNESS_SENSOR: _norm_empty(user_input.get(A_BRIGHTNESS_SENSOR)),
+                A_BRIGHTNESS_DOWN: user_input.get(A_BRIGHTNESS_DOWN, 5000),
+                A_BRIGHTNESS_UP: user_input.get(A_BRIGHTNESS_UP, 15000),
             }
             return await self.async_step_manage_areas()
 
