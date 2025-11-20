@@ -46,9 +46,23 @@
       },
       "manage_areas": {
         "title": "Bereiche verwalten",
-        "description": "Wohn-, Schlaf- und Kinderbereich konfigurieren",
+        "description": "Standard- und eigene Bereiche verwalten",
         "data": {
           "area_action": "Bereich"
+        }
+      },
+      "add_area": {
+        "title": "Neuen Bereich hinzufügen",
+        "description": "Erstelle einen benutzerdefinierten Bereich mit eigenen Einstellungen",
+        "data": {
+          "area_id": "Bereichs-ID",
+          "area_name": "Bereichsname",
+          "area_mode": "Steuerungsart"
+        },
+        "data_description": {
+          "area_id": "Eindeutige ID für den Bereich (z.B. 'buero', 'gaestezimmer')",
+          "area_name": "Anzeigename für den Bereich",
+          "area_mode": "Art der Zeitsteuerung für diesen Bereich"
         }
       },
       "edit_area": {
@@ -66,7 +80,8 @@
           "stagger_delay": "Verzögerung zwischen Rollläden (Sekunden)",
           "brightness_sensor": "Helligkeitssensor (optional)",
           "brightness_down_lux": "Helligkeit zum Runterfahren (Lux)",
-          "brightness_up_lux": "Helligkeit zum Hochfahren (Lux)"
+          "brightness_up_lux": "Helligkeit zum Hochfahren (Lux)",
+          "delete_area": "⚠️ Diesen Bereich löschen"
         },
         "data_description": {
           "area_name": "Name für diesen Bereich",

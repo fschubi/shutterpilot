@@ -7,9 +7,11 @@ CONF_DEFAULT_COOLDOWN = "default_cooldown"
 
 # Areas (Bereiche) - Zeit-Templates
 CONF_AREAS = "areas"
+# Vordefinierte Standard-Bereiche (werden bei Setup angelegt)
 AREA_LIVING = "living"
 AREA_SLEEPING = "sleeping"
 AREA_CHILDREN = "children"
+DEFAULT_AREAS = [AREA_LIVING, AREA_SLEEPING, AREA_CHILDREN]
 
 # Area configuration keys
 A_NAME = "area_name"

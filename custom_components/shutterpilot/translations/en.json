@@ -36,9 +36,23 @@
       },
       "manage_areas": {
         "title": "Manage Areas",
-        "description": "Configure living, sleeping and children areas",
+        "description": "Manage default and custom areas",
         "data": {
           "area_action": "Area"
+        }
+      },
+      "add_area": {
+        "title": "Add New Area",
+        "description": "Create a custom area with individual settings",
+        "data": {
+          "area_id": "Area ID",
+          "area_name": "Area Name",
+          "area_mode": "Control Mode"
+        },
+        "data_description": {
+          "area_id": "Unique ID for the area (e.g. 'office', 'guest_room')",
+          "area_name": "Display name for the area",
+          "area_mode": "Type of time control for this area"
         }
       },
       "edit_area": {
@@ -56,7 +70,8 @@
           "stagger_delay": "Delay between shutters (seconds)",
           "brightness_sensor": "Brightness sensor (optional)",
           "brightness_down_lux": "Brightness to close (Lux)",
-          "brightness_up_lux": "Brightness to open (Lux)"
+          "brightness_up_lux": "Brightness to open (Lux)",
+          "delete_area": "⚠️ Delete this area"
         },
         "data_description": {
           "area_name": "Name for this area",

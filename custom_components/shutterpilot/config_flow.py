@@ -195,88 +195,239 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
     # ========== BEREICHS-MANAGEMENT ==========
     
     async def async_step_manage_areas(self, user_input=None):
-        """Bereichs-Verwaltung."""
-        area_names = {
-            AREA_LIVING: self._areas.get(AREA_LIVING, {}).get(A_NAME, "Wohnbereich"),
-            AREA_SLEEPING: self._areas.get(AREA_SLEEPING, {}).get(A_NAME, "Schlafbereich"),
-            AREA_CHILDREN: self._areas.get(AREA_CHILDREN, {}).get(A_NAME, "Kinderbereich"),
+        """Bereichs-Verwaltung mit dynamischen Bereichen."""
+        # Erstelle Menü mit allen vorhandenen Bereichen
+        menu_options = {
+            "back": "Zurück zum Hauptmenü",
+            "add_area": "➕ Neuen Bereich hinzufügen",
         }
         
+        # Füge alle vorhandenen Bereiche hinzu
+        for area_id, area_config in self._areas.items():
+            area_name = area_config.get(A_NAME, area_id)
+            # Markiere Standard-Bereiche
+            if area_id in DEFAULT_AREAS:
+                menu_options[area_id] = f"✏️ Bearbeiten: {area_name}"
+            else:
+                menu_options[area_id] = f"✏️ {area_name} (Bearbeiten/Löschen)"
+        
         menu = vol.Schema({
-            vol.Optional("area_action", default="back"): vol.In({
-                "back": "Zurück zum Hauptmenü",
-                AREA_LIVING: f"Bearbeiten: {area_names[AREA_LIVING]}",
-                AREA_SLEEPING: f"Bearbeiten: {area_names[AREA_SLEEPING]}",
-                AREA_CHILDREN: f"Bearbeiten: {area_names[AREA_CHILDREN]}",
-            }),
+            vol.Optional("area_action", default="back"): vol.In(menu_options),
         })
 
         if user_input is not None:
             action = user_input.get("area_action", "back")
             if action == "back":
                 return await self.async_step_init()
-            if action in [AREA_LIVING, AREA_SLEEPING, AREA_CHILDREN]:
+            elif action == "add_area":
+                self._edit_area = None  # Signal: Neuer Bereich
+                return await self.async_step_add_area()
+            else:
+                # Bereich bearbeiten
                 self._edit_area = action
                 return await self.async_step_edit_area()
 
         return self.async_show_form(step_id="manage_areas", data_schema=menu)
-
-    async def async_step_edit_area(self, user_input=None):
-        """Bereich bearbeiten."""
-        if not self._edit_area:
-            return await self.async_step_manage_areas()
-        
-        current = self._areas.get(self._edit_area, {})
-        
+    
+    async def async_step_add_area(self, user_input=None):
+        """Neuen Bereich hinzufügen."""
         schema = vol.Schema({
-            vol.Required(A_NAME, default=current.get(A_NAME, "")): str,
-            vol.Required(A_MODE, default=current.get(A_MODE, MODE_SUN)): vol.In({
+            vol.Required("area_id"): str,
+            vol.Required(A_NAME): str,
+            vol.Required(A_MODE, default=MODE_SUN): vol.In({
                 MODE_TIME_ONLY: "Nur Zeit",
                 MODE_SUN: "Zeit mit Sonnenauf-/-untergang",
                 MODE_GOLDEN_HOUR: "Zeit mit Golden Hour",
                 MODE_BRIGHTNESS: "Helligkeit (Lux-basiert)",
             }),
-            vol.Required(A_UP_TIME_WEEK, default=current.get(A_UP_TIME_WEEK, "07:00")): str,
-            vol.Required(A_DOWN_TIME_WEEK, default=current.get(A_DOWN_TIME_WEEK, "22:00")): str,
-            vol.Required(A_UP_TIME_WEEKEND, default=current.get(A_UP_TIME_WEEKEND, "08:00")): str,
-            vol.Required(A_DOWN_TIME_WEEKEND, default=current.get(A_DOWN_TIME_WEEKEND, "23:00")): str,
-            vol.Required(A_UP_EARLIEST, default=current.get(A_UP_EARLIEST, "06:00")): str,
-            vol.Required(A_UP_LATEST, default=current.get(A_UP_LATEST, "09:00")): str,
-            vol.Required(A_STAGGER_DELAY, default=current.get(A_STAGGER_DELAY, 10)): vol.All(int, vol.Range(min=0, max=300)),
-            # Helligkeits-Steuerung (nur für MODE_BRIGHTNESS)
-            vol.Optional(A_BRIGHTNESS_SENSOR, default=current.get(A_BRIGHTNESS_SENSOR)): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="sensor", device_class="illuminance")
-            ),
-            vol.Optional(A_BRIGHTNESS_DOWN, default=current.get(A_BRIGHTNESS_DOWN, 5000)): vol.Coerce(float),
-            vol.Optional(A_BRIGHTNESS_UP, default=current.get(A_BRIGHTNESS_UP, 15000)): vol.Coerce(float),
         })
+        
+        if user_input is not None:
+            # Validiere area_id
+            area_id = user_input["area_id"].lower().strip().replace(" ", "_")
+            
+            # Prüfe ob ID bereits existiert
+            if area_id in self._areas:
+                return self.async_show_form(
+                    step_id="add_area",
+                    data_schema=schema,
+                    errors={"area_id": "Diese Bereichs-ID existiert bereits"}
+                )
+            
+            # Prüfe auf gültige ID (nur Buchstaben, Zahlen, Underscore)
+            if not area_id.replace("_", "").isalnum():
+                return self.async_show_form(
+                    step_id="add_area",
+                    data_schema=schema,
+                    errors={"area_id": "Nur Buchstaben, Zahlen und Unterstriche erlaubt"}
+                )
+            
+            # Erstelle neuen Bereich mit Defaults
+            self._areas[area_id] = {
+                A_NAME: user_input[A_NAME],
+                A_MODE: user_input[A_MODE],
+                A_UP_TIME_WEEK: "07:00",
+                A_DOWN_TIME_WEEK: "22:00",
+                A_UP_TIME_WEEKEND: "08:00",
+                A_DOWN_TIME_WEEKEND: "23:00",
+                A_UP_EARLIEST: "06:00",
+                A_UP_LATEST: "09:00",
+                A_STAGGER_DELAY: 10,
+                A_BRIGHTNESS_SENSOR: None,
+                A_BRIGHTNESS_DOWN: 5000,
+                A_BRIGHTNESS_UP: 15000,
+            }
+            
+            # Direkt zur Bearbeitung weitergehen
+            self._edit_area = area_id
+            return await self.async_step_edit_area()
+        
+        return self.async_show_form(step_id="add_area", data_schema=schema)
+
+    async def async_step_edit_area(self, user_input=None):
+        """Bereich bearbeiten - Dynamische Felder basierend auf Modus."""
+        if not self._edit_area:
+            return await self.async_step_manage_areas()
+        
+        current = self._areas.get(self._edit_area, {})
+        
+        # Bestimme aktuellen Modus (aus user_input oder gespeichert)
+        current_mode = user_input.get(A_MODE) if user_input else current.get(A_MODE, MODE_SUN)
+        
+        # Basis-Schema (immer angezeigt)
+        schema_fields = {
+            vol.Required(A_NAME, default=current.get(A_NAME, "")): str,
+            vol.Required(A_MODE, default=current_mode): vol.In({
+                MODE_TIME_ONLY: "Nur Zeit",
+                MODE_SUN: "Zeit mit Sonnenauf-/-untergang",
+                MODE_GOLDEN_HOUR: "Zeit mit Golden Hour",
+                MODE_BRIGHTNESS: "Helligkeit (Lux-basiert)",
+            }),
+        }
+        
+        # Lösch-Option für benutzerdefinierte Bereiche
+        if self._edit_area not in DEFAULT_AREAS:
+            schema_fields[vol.Optional("delete_area", default=False)] = bool
+        
+        # DYNAMISCHE FELDER basierend auf Modus
+        if current_mode == MODE_BRIGHTNESS:
+            # Helligkeit-Modus: NUR Helligkeit + Earliest/Latest + Stagger
+            schema_fields.update({
+                vol.Required(A_BRIGHTNESS_SENSOR, default=current.get(A_BRIGHTNESS_SENSOR)): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="illuminance")
+                ),
+                vol.Required(A_BRIGHTNESS_DOWN, default=current.get(A_BRIGHTNESS_DOWN, 5000)): vol.Coerce(float),
+                vol.Required(A_BRIGHTNESS_UP, default=current.get(A_BRIGHTNESS_UP, 15000)): vol.Coerce(float),
+                vol.Required(A_UP_EARLIEST, default=current.get(A_UP_EARLIEST, "06:00")): str,
+                vol.Required(A_UP_LATEST, default=current.get(A_UP_LATEST, "22:00")): str,
+                vol.Required(A_STAGGER_DELAY, default=current.get(A_STAGGER_DELAY, 10)): vol.All(int, vol.Range(min=0, max=300)),
+            })
+        elif current_mode in [MODE_SUN, MODE_GOLDEN_HOUR]:
+            # Sonnenstand/Golden Hour: Zeiten + Earliest/Latest + Stagger
+            schema_fields.update({
+                vol.Required(A_UP_TIME_WEEK, default=current.get(A_UP_TIME_WEEK, "07:00")): str,
+                vol.Required(A_DOWN_TIME_WEEK, default=current.get(A_DOWN_TIME_WEEK, "22:00")): str,
+                vol.Required(A_UP_TIME_WEEKEND, default=current.get(A_UP_TIME_WEEKEND, "08:00")): str,
+                vol.Required(A_DOWN_TIME_WEEKEND, default=current.get(A_DOWN_TIME_WEEKEND, "23:00")): str,
+                vol.Required(A_UP_EARLIEST, default=current.get(A_UP_EARLIEST, "06:00")): str,
+                vol.Required(A_UP_LATEST, default=current.get(A_UP_LATEST, "09:00")): str,
+                vol.Required(A_STAGGER_DELAY, default=current.get(A_STAGGER_DELAY, 10)): vol.All(int, vol.Range(min=0, max=300)),
+            })
+        else:  # MODE_TIME_ONLY
+            # Nur Zeit: NUR Zeiten + Stagger (KEINE Earliest/Latest)
+            schema_fields.update({
+                vol.Required(A_UP_TIME_WEEK, default=current.get(A_UP_TIME_WEEK, "07:00")): str,
+                vol.Required(A_DOWN_TIME_WEEK, default=current.get(A_DOWN_TIME_WEEK, "22:00")): str,
+                vol.Required(A_UP_TIME_WEEKEND, default=current.get(A_UP_TIME_WEEKEND, "08:00")): str,
+                vol.Required(A_DOWN_TIME_WEEKEND, default=current.get(A_DOWN_TIME_WEEKEND, "23:00")): str,
+                vol.Required(A_STAGGER_DELAY, default=current.get(A_STAGGER_DELAY, 10)): vol.All(int, vol.Range(min=0, max=300)),
+            })
+        
+        schema = vol.Schema(schema_fields)
 
         if user_input is not None:
-            # Validiere Zeitfelder
+            # Prüfe ob Bereich gelöscht werden soll
+            if user_input.get("delete_area", False):
+                # Prüfe ob Profile diesem Bereich zugeordnet sind
+                assigned_profiles = [p for p in self._profiles if p.get(P_AREA) == self._edit_area]
+                if assigned_profiles:
+                    return self.async_show_form(
+                        step_id="edit_area",
+                        data_schema=schema,
+                        errors={"base": f"Kann nicht gelöscht werden: {len(assigned_profiles)} Profile sind diesem Bereich zugeordnet"}
+                    )
+                
+                # Lösche Bereich
+                del self._areas[self._edit_area]
+                return await self.async_step_manage_areas()
+            
+            # Validiere Zeitfelder (nur wenn vorhanden)
             errors = {}
-            for field in [A_UP_TIME_WEEK, A_DOWN_TIME_WEEK, A_UP_TIME_WEEKEND, A_DOWN_TIME_WEEKEND, A_UP_EARLIEST, A_UP_LATEST]:
-                if not _validate_time(user_input.get(field)):
-                    errors[field] = "Ungültiges Zeitformat (erwartet: HH:MM)"
+            time_fields = [A_UP_TIME_WEEK, A_DOWN_TIME_WEEK, A_UP_TIME_WEEKEND, A_DOWN_TIME_WEEKEND, A_UP_EARLIEST, A_UP_LATEST]
+            for field in time_fields:
+                if field in user_input and user_input.get(field):
+                    if not _validate_time(user_input.get(field)):
+                        errors[field] = "Ungültiges Zeitformat (erwartet: HH:MM)"
             
             if errors:
                 return self.async_show_form(step_id="edit_area", data_schema=schema, errors=errors)
             
-            # Speichere Bereich
-            self._areas[self._edit_area] = {
+            # Speichere Bereich mit allen Feldern (auch nicht angezeigte mit Defaults)
+            mode = user_input[A_MODE]
+            
+            # Basis-Daten (immer vorhanden)
+            area_data = {
                 A_NAME: user_input[A_NAME],
-                A_MODE: user_input[A_MODE],
-                A_UP_TIME_WEEK: _validate_time(user_input[A_UP_TIME_WEEK]),
-                A_DOWN_TIME_WEEK: _validate_time(user_input[A_DOWN_TIME_WEEK]),
-                A_UP_TIME_WEEKEND: _validate_time(user_input[A_UP_TIME_WEEKEND]),
-                A_DOWN_TIME_WEEKEND: _validate_time(user_input[A_DOWN_TIME_WEEKEND]),
-                A_UP_EARLIEST: _validate_time(user_input[A_UP_EARLIEST]),
-                A_UP_LATEST: _validate_time(user_input[A_UP_LATEST]),
-                A_STAGGER_DELAY: user_input[A_STAGGER_DELAY],
-                # Helligkeits-Steuerung
-                A_BRIGHTNESS_SENSOR: _norm_empty(user_input.get(A_BRIGHTNESS_SENSOR)),
-                A_BRIGHTNESS_DOWN: user_input.get(A_BRIGHTNESS_DOWN, 5000),
-                A_BRIGHTNESS_UP: user_input.get(A_BRIGHTNESS_UP, 15000),
+                A_MODE: mode,
+                A_STAGGER_DELAY: user_input.get(A_STAGGER_DELAY, 10),
             }
+            
+            # Zeit-Felder (für TIME_ONLY, SUN, GOLDEN_HOUR)
+            if mode in [MODE_TIME_ONLY, MODE_SUN, MODE_GOLDEN_HOUR]:
+                area_data.update({
+                    A_UP_TIME_WEEK: _validate_time(user_input.get(A_UP_TIME_WEEK, "07:00")),
+                    A_DOWN_TIME_WEEK: _validate_time(user_input.get(A_DOWN_TIME_WEEK, "22:00")),
+                    A_UP_TIME_WEEKEND: _validate_time(user_input.get(A_UP_TIME_WEEKEND, "08:00")),
+                    A_DOWN_TIME_WEEKEND: _validate_time(user_input.get(A_DOWN_TIME_WEEKEND, "23:00")),
+                })
+            else:
+                # Brightness-Modus: Defaults für Zeit-Felder
+                area_data.update({
+                    A_UP_TIME_WEEK: current.get(A_UP_TIME_WEEK, "07:00"),
+                    A_DOWN_TIME_WEEK: current.get(A_DOWN_TIME_WEEK, "22:00"),
+                    A_UP_TIME_WEEKEND: current.get(A_UP_TIME_WEEKEND, "08:00"),
+                    A_DOWN_TIME_WEEKEND: current.get(A_DOWN_TIME_WEEKEND, "23:00"),
+                })
+            
+            # Earliest/Latest Felder (für SUN, GOLDEN_HOUR, BRIGHTNESS)
+            if mode in [MODE_SUN, MODE_GOLDEN_HOUR, MODE_BRIGHTNESS]:
+                area_data.update({
+                    A_UP_EARLIEST: _validate_time(user_input.get(A_UP_EARLIEST, "06:00")),
+                    A_UP_LATEST: _validate_time(user_input.get(A_UP_LATEST, "09:00")),
+                })
+            else:
+                # TIME_ONLY: Defaults für Earliest/Latest
+                area_data.update({
+                    A_UP_EARLIEST: current.get(A_UP_EARLIEST, "06:00"),
+                    A_UP_LATEST: current.get(A_UP_LATEST, "09:00"),
+                })
+            
+            # Helligkeits-Felder (nur für BRIGHTNESS)
+            if mode == MODE_BRIGHTNESS:
+                area_data.update({
+                    A_BRIGHTNESS_SENSOR: _norm_empty(user_input.get(A_BRIGHTNESS_SENSOR)),
+                    A_BRIGHTNESS_DOWN: user_input.get(A_BRIGHTNESS_DOWN, 5000),
+                    A_BRIGHTNESS_UP: user_input.get(A_BRIGHTNESS_UP, 15000),
+                })
+            else:
+                # Andere Modi: Behalte alte Werte oder setze Defaults
+                area_data.update({
+                    A_BRIGHTNESS_SENSOR: current.get(A_BRIGHTNESS_SENSOR),
+                    A_BRIGHTNESS_DOWN: current.get(A_BRIGHTNESS_DOWN, 5000),
+                    A_BRIGHTNESS_UP: current.get(A_BRIGHTNESS_UP, 15000),
+                })
+            
+            self._areas[self._edit_area] = area_data
             return await self.async_step_manage_areas()
 
         return self.async_show_form(step_id="edit_area", data_schema=schema)
@@ -285,12 +436,11 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
     
     async def async_step_add_profile(self, user_input=None):
         """Profil hinzufügen mit allen neuen Feldern."""
-        area_choices = {
-            "none": "Keinem Bereich zuordnen",
-            AREA_LIVING: self._areas.get(AREA_LIVING, {}).get(A_NAME, "Wohnbereich"),
-            AREA_SLEEPING: self._areas.get(AREA_SLEEPING, {}).get(A_NAME, "Schlafbereich"),
-            AREA_CHILDREN: self._areas.get(AREA_CHILDREN, {}).get(A_NAME, "Kinderbereich"),
-        }
+        # Dynamisch alle Bereiche laden
+        area_choices = {"none": "Keinem Bereich zuordnen"}
+        for area_id, area_config in self._areas.items():
+            area_name = area_config.get(A_NAME, area_id)
+            area_choices[area_id] = area_name
         
         schema = vol.Schema({
             # Basis
@@ -409,12 +559,11 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_init()
         cur = self._profiles[idx]
 
-        area_choices = {
-            "none": "Keinem Bereich zuordnen",
-            AREA_LIVING: self._areas.get(AREA_LIVING, {}).get(A_NAME, "Wohnbereich"),
-            AREA_SLEEPING: self._areas.get(AREA_SLEEPING, {}).get(A_NAME, "Schlafbereich"),
-            AREA_CHILDREN: self._areas.get(AREA_CHILDREN, {}).get(A_NAME, "Kinderbereich"),
-        }
+        # Dynamisch alle Bereiche laden
+        area_choices = {"none": "Keinem Bereich zuordnen"}
+        for area_id, area_config in self._areas.items():
+            area_name = area_config.get(A_NAME, area_id)
+            area_choices[area_id] = area_name
 
         schema = vol.Schema({
             # Basis
