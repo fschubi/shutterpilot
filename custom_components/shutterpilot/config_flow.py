@@ -124,6 +124,7 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
         self._base_opts: dict = {}
         self._edit_index: int | None = None
         self._edit_area: str | None = None
+        self._temp_area_data: dict = {}  # Zwischenspeicher für 2-Schritt-Bereichsbearbeitung
 
     async def async_step_init(self, user_input=None):
         data = _opt(self.entry)
@@ -285,34 +286,64 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(step_id="add_area", data_schema=schema)
 
     async def async_step_edit_area(self, user_input=None):
-        """Bereich bearbeiten - Dynamische Felder basierend auf Modus."""
+        """Bereich bearbeiten - Schritt 1: Name und Modus auswählen."""
         if not self._edit_area:
             return await self.async_step_manage_areas()
-        
+
         current = self._areas.get(self._edit_area, {})
         
-        # Bestimme aktuellen Modus (aus user_input oder gespeichert)
-        current_mode = user_input.get(A_MODE) if user_input else current.get(A_MODE, MODE_SUN)
-        
-        # Basis-Schema (immer angezeigt)
         schema_fields = {
             vol.Required(A_NAME, default=current.get(A_NAME, "")): str,
-            vol.Required(A_MODE, default=current_mode): vol.In({
+            vol.Required(A_MODE, default=current.get(A_MODE, MODE_SUN)): vol.In({
                 MODE_TIME_ONLY: "Nur Zeit",
                 MODE_SUN: "Zeit mit Sonnenauf-/-untergang",
                 MODE_GOLDEN_HOUR: "Zeit mit Golden Hour",
                 MODE_BRIGHTNESS: "Helligkeit (Lux-basiert)",
             }),
         }
-        
-        # Lösch-Option für benutzerdefinierte Bereiche
+
         if self._edit_area not in DEFAULT_AREAS:
             schema_fields[vol.Optional("delete_area", default=False)] = bool
         
-        # DYNAMISCHE FELDER basierend auf Modus
-        if current_mode == MODE_BRIGHTNESS:
+        schema = vol.Schema(schema_fields)
+
+        if user_input is not None:
+            if user_input.get("delete_area", False):
+                assigned_profiles = [p for p in self._profiles if p.get(P_AREA) == self._edit_area]
+                if assigned_profiles:
+                    return self.async_show_form(
+                        step_id="edit_area",
+                        data_schema=schema,
+                        errors={"base": f"Kann nicht gelöscht werden: {len(assigned_profiles)} Profile sind diesem Bereich zugeordnet"}
+                    )
+                del self._areas[self._edit_area]
+                return await self.async_step_manage_areas()
+            
+            # Speichere Name und Modus temporär
+            self._temp_area_data = {
+                A_NAME: user_input[A_NAME],
+                A_MODE: user_input[A_MODE],
+            }
+            
+            # Weiter zu Schritt 2: Detail-Konfiguration
+            return await self.async_step_edit_area_details()
+        
+        return self.async_show_form(step_id="edit_area", data_schema=schema)
+    
+    async def async_step_edit_area_details(self, user_input=None):
+        """Bereich bearbeiten - Schritt 2: Detail-Felder basierend auf Modus."""
+        if not self._edit_area or not self._temp_area_data:
+            return await self.async_step_manage_areas()
+        
+        current = self._areas.get(self._edit_area, {})
+        mode = self._temp_area_data.get(A_MODE, MODE_SUN)
+        
+        # Dynamische Schema-Felder basierend auf Modus
+        schema_fields = {}
+        
+        if mode == MODE_BRIGHTNESS:
             # Helligkeit-Modus: NUR Helligkeit + Earliest/Latest + Stagger
-            schema_fields.update({
+            schema_fields = {
                 vol.Required(A_BRIGHTNESS_SENSOR, default=current.get(A_BRIGHTNESS_SENSOR)): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor", device_class="illuminance")
                 ),
@@ -321,10 +352,10 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
                 vol.Required(A_UP_EARLIEST, default=current.get(A_UP_EARLIEST, "06:00")): str,
                 vol.Required(A_UP_LATEST, default=current.get(A_UP_LATEST, "22:00")): str,
                 vol.Required(A_STAGGER_DELAY, default=current.get(A_STAGGER_DELAY, 10)): vol.All(int, vol.Range(min=0, max=300)),
-            })
-        elif current_mode in [MODE_SUN, MODE_GOLDEN_HOUR]:
+            }
+        elif mode in [MODE_SUN, MODE_GOLDEN_HOUR]:
             # Sonnenstand/Golden Hour: Zeiten + Earliest/Latest + Stagger
-            schema_fields.update({
+            schema_fields = {
                 vol.Required(A_UP_TIME_WEEK, default=current.get(A_UP_TIME_WEEK, "07:00")): str,
                 vol.Required(A_DOWN_TIME_WEEK, default=current.get(A_DOWN_TIME_WEEK, "22:00")): str,
                 vol.Required(A_UP_TIME_WEEKEND, default=current.get(A_UP_TIME_WEEKEND, "08:00")): str,
@@ -332,35 +363,20 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
                 vol.Required(A_UP_EARLIEST, default=current.get(A_UP_EARLIEST, "06:00")): str,
                 vol.Required(A_UP_LATEST, default=current.get(A_UP_LATEST, "09:00")): str,
                 vol.Required(A_STAGGER_DELAY, default=current.get(A_STAGGER_DELAY, 10)): vol.All(int, vol.Range(min=0, max=300)),
-            })
+            }
         else:  # MODE_TIME_ONLY
             # Nur Zeit: NUR Zeiten + Stagger (KEINE Earliest/Latest)
-            schema_fields.update({
+            schema_fields = {
                 vol.Required(A_UP_TIME_WEEK, default=current.get(A_UP_TIME_WEEK, "07:00")): str,
                 vol.Required(A_DOWN_TIME_WEEK, default=current.get(A_DOWN_TIME_WEEK, "22:00")): str,
                 vol.Required(A_UP_TIME_WEEKEND, default=current.get(A_UP_TIME_WEEKEND, "08:00")): str,
                 vol.Required(A_DOWN_TIME_WEEKEND, default=current.get(A_DOWN_TIME_WEEKEND, "23:00")): str,
                 vol.Required(A_STAGGER_DELAY, default=current.get(A_STAGGER_DELAY, 10)): vol.All(int, vol.Range(min=0, max=300)),
-            })
+            }
         
         schema = vol.Schema(schema_fields)
-
+        
         if user_input is not None:
-            # Prüfe ob Bereich gelöscht werden soll
-            if user_input.get("delete_area", False):
-                # Prüfe ob Profile diesem Bereich zugeordnet sind
-                assigned_profiles = [p for p in self._profiles if p.get(P_AREA) == self._edit_area]
-                if assigned_profiles:
-                    return self.async_show_form(
-                        step_id="edit_area",
-                        data_schema=schema,
-                        errors={"base": f"Kann nicht gelöscht werden: {len(assigned_profiles)} Profile sind diesem Bereich zugeordnet"}
-                    )
-                
-                # Lösche Bereich
-                del self._areas[self._edit_area]
-                return await self.async_step_manage_areas()
-            
             # Validiere Zeitfelder (nur wenn vorhanden)
             errors = {}
             time_fields = [A_UP_TIME_WEEK, A_DOWN_TIME_WEEK, A_UP_TIME_WEEKEND, A_DOWN_TIME_WEEKEND, A_UP_EARLIEST, A_UP_LATEST]
@@ -370,14 +386,11 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
                         errors[field] = "Ungültiges Zeitformat (erwartet: HH:MM)"
             
             if errors:
-                return self.async_show_form(step_id="edit_area", data_schema=schema, errors=errors)
+                return self.async_show_form(step_id="edit_area_details", data_schema=schema, errors=errors)
             
-            # Speichere Bereich mit allen Feldern (auch nicht angezeigte mit Defaults)
-            mode = user_input[A_MODE]
-            
-            # Basis-Daten (immer vorhanden)
+            # Speichere Bereich mit allen Feldern
             area_data = {
-                A_NAME: user_input[A_NAME],
+                A_NAME: self._temp_area_data[A_NAME],
                 A_MODE: mode,
                 A_STAGGER_DELAY: user_input.get(A_STAGGER_DELAY, 10),
             }
@@ -391,7 +404,7 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
                     A_DOWN_TIME_WEEKEND: _validate_time(user_input.get(A_DOWN_TIME_WEEKEND, "23:00")),
                 })
             else:
-                # Brightness-Modus: Defaults für Zeit-Felder
+                # Brightness: Behalte alte Werte
                 area_data.update({
                     A_UP_TIME_WEEK: current.get(A_UP_TIME_WEEK, "07:00"),
                     A_DOWN_TIME_WEEK: current.get(A_DOWN_TIME_WEEK, "22:00"),
@@ -399,14 +412,13 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
                     A_DOWN_TIME_WEEKEND: current.get(A_DOWN_TIME_WEEKEND, "23:00"),
                 })
             
-            # Earliest/Latest Felder (für SUN, GOLDEN_HOUR, BRIGHTNESS)
+            # Earliest/Latest (für SUN, GOLDEN_HOUR, BRIGHTNESS)
             if mode in [MODE_SUN, MODE_GOLDEN_HOUR, MODE_BRIGHTNESS]:
                 area_data.update({
                     A_UP_EARLIEST: _validate_time(user_input.get(A_UP_EARLIEST, "06:00")),
                     A_UP_LATEST: _validate_time(user_input.get(A_UP_LATEST, "09:00")),
                 })
             else:
-                # TIME_ONLY: Defaults für Earliest/Latest
                 area_data.update({
                     A_UP_EARLIEST: current.get(A_UP_EARLIEST, "06:00"),
                     A_UP_LATEST: current.get(A_UP_LATEST, "09:00"),
@@ -420,7 +432,6 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
                     A_BRIGHTNESS_UP: user_input.get(A_BRIGHTNESS_UP, 15000),
                 })
             else:
-                # Andere Modi: Behalte alte Werte oder setze Defaults
                 area_data.update({
                     A_BRIGHTNESS_SENSOR: current.get(A_BRIGHTNESS_SENSOR),
                     A_BRIGHTNESS_DOWN: current.get(A_BRIGHTNESS_DOWN, 5000),
@@ -428,9 +439,10 @@ class ShutterPilotOptionsFlow(config_entries.OptionsFlow):
                 })
             
             self._areas[self._edit_area] = area_data
+            self._temp_area_data = {}  # Cleanup
             return await self.async_step_manage_areas()
-
-        return self.async_show_form(step_id="edit_area", data_schema=schema)
+        
+        return self.async_show_form(step_id="edit_area_details", data_schema=schema)
 
     # ========== PROFIL-MANAGEMENT (ERWEITERT) ==========
     

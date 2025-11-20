@@ -66,11 +66,23 @@
         }
       },
       "edit_area": {
-        "title": "Bereich bearbeiten",
-        "description": "Zeit-Einstellungen für diesen Bereich",
+        "title": "Bereich bearbeiten - Schritt 1",
+        "description": "Name und Steuerungsart für diesen Bereich auswählen",
         "data": {
           "area_name": "Bereichsname",
           "area_mode": "Steuerungsart",
+          "delete_area": "⚠️ Diesen Bereich löschen"
+        },
+        "data_description": {
+          "area_name": "Name für diesen Bereich",
+          "area_mode": "Art der Zeitsteuerung für Rollläden in diesem Bereich",
+          "delete_area": "Aktivieren, um diesen benutzerdefinierten Bereich zu löschen"
+        }
+      },
+      "edit_area_details": {
+        "title": "Bereich bearbeiten - Schritt 2",
+        "description": "Konfigurieren Sie die spezifischen Einstellungen für den ausgewählten Modus",
+        "data": {
           "up_time_weekday": "Hochfahrzeit Wochentag (HH:MM)",
           "down_time_weekday": "Runterfahrzeit Wochentag (HH:MM)",
           "up_time_weekend": "Hochfahrzeit Wochenende (HH:MM)",
@@ -78,14 +90,11 @@
           "up_earliest": "Früheste Hochfahrzeit (HH:MM)",
           "up_latest": "Späteste Hochfahrzeit (HH:MM)",
           "stagger_delay": "Verzögerung zwischen Rollläden (Sekunden)",
-          "brightness_sensor": "Helligkeitssensor (optional)",
+          "brightness_sensor": "Helligkeitssensor",
           "brightness_down_lux": "Helligkeit zum Runterfahren (Lux)",
-          "brightness_up_lux": "Helligkeit zum Hochfahren (Lux)",
-          "delete_area": "⚠️ Diesen Bereich löschen"
+          "brightness_up_lux": "Helligkeit zum Hochfahren (Lux)"
         },
         "data_description": {
-          "area_name": "Name für diesen Bereich",
-          "area_mode": "Art der Zeitsteuerung für Rollläden in diesem Bereich",
           "up_time_weekday": "Zeit zum Hochfahren während der Woche",
           "down_time_weekday": "Zeit zum Runterfahren während der Woche",
           "up_time_weekend": "Zeit zum Hochfahren am Wochenende",
@@ -93,9 +102,9 @@
           "up_earliest": "Rollläden fahren frühestens zu dieser Zeit hoch",
           "up_latest": "Rollläden fahren spätestens zu dieser Zeit hoch",
           "stagger_delay": "Zeitverzögerung zwischen einzelnen Rollladenfahrten zur Vermeidung von Funkstörungen",
-          "brightness_sensor": "Helligkeitssensor für die helligkeitsbasierte Steuerung (nur für Modus 'Helligkeit')",
-          "brightness_down_lux": "Lux-Wert unter dem die Rollläden runterfahren (z.B. 5000 lx)",
-          "brightness_up_lux": "Lux-Wert über dem die Rollläden hochfahren (z.B. 15000 lx)"
+          "brightness_sensor": "Sensor zur Messung der Helligkeit für diesen Bereich",
+          "brightness_down_lux": "Helligkeitswert (Lux) unter dem die Rollläden herunterfahren",
+          "brightness_up_lux": "Helligkeitswert (Lux) über dem die Rollläden hochfahren"
         }
       },
       "add_profile": {

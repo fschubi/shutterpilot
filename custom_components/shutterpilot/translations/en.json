@@ -56,11 +56,23 @@
         }
       },
       "edit_area": {
-        "title": "Edit Area",
-        "description": "Time settings for this area",
+        "title": "Edit Area - Step 1",
+        "description": "Select name and control mode for this area",
         "data": {
           "area_name": "Area name",
           "area_mode": "Control mode",
+          "delete_area": "⚠️ Delete this area"
+        },
+        "data_description": {
+          "area_name": "Name for this area",
+          "area_mode": "Type of time control for shutters in this area",
+          "delete_area": "Enable to delete this custom area"
+        }
+      },
+      "edit_area_details": {
+        "title": "Edit Area - Step 2",
+        "description": "Configure the specific settings for the selected mode",
+        "data": {
           "up_time_weekday": "Open time weekday (HH:MM)",
           "down_time_weekday": "Close time weekday (HH:MM)",
           "up_time_weekend": "Open time weekend (HH:MM)",
@@ -68,14 +80,11 @@
           "up_earliest": "Earliest open time (HH:MM)",
           "up_latest": "Latest open time (HH:MM)",
           "stagger_delay": "Delay between shutters (seconds)",
-          "brightness_sensor": "Brightness sensor (optional)",
+          "brightness_sensor": "Brightness sensor",
           "brightness_down_lux": "Brightness to close (Lux)",
-          "brightness_up_lux": "Brightness to open (Lux)",
-          "delete_area": "⚠️ Delete this area"
+          "brightness_up_lux": "Brightness to open (Lux)"
         },
         "data_description": {
-          "area_name": "Name for this area",
-          "area_mode": "Type of time control for shutters in this area",
           "up_time_weekday": "Time to open during weekdays",
           "down_time_weekday": "Time to close during weekdays",
           "up_time_weekend": "Time to open on weekends",
@@ -83,9 +92,9 @@
           "up_earliest": "Shutters open at earliest at this time",
           "up_latest": "Shutters open at latest at this time",
           "stagger_delay": "Time delay between individual shutter movements to avoid RF interference",
-          "brightness_sensor": "Brightness sensor for brightness-based control (only for 'Brightness' mode)",
-          "brightness_down_lux": "Lux value below which shutters close (e.g. 5000 lx)",
-          "brightness_up_lux": "Lux value above which shutters open (e.g. 15000 lx)"
+          "brightness_sensor": "Sensor to measure brightness for this area",
+          "brightness_down_lux": "Brightness value (Lux) below which shutters close",
+          "brightness_up_lux": "Brightness value (Lux) above which shutters open"
         }
       },
       "add_profile": {
